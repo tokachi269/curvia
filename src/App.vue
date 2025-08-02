@@ -263,7 +263,7 @@
 
 <script>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
-import { generateMultiPointCurve, generateCurveWithClothoid, generateClothoidCurve } from './utils/curveGenerator.js'
+import { generateClothoidCurve } from './utils/curveGenerator.js'
 import { CanvasRenderer } from './utils/canvasRenderer.js'
 import { detectOverlaps, formatOverlapReport } from './utils/overlapDetector.js'
 

@@ -181,12 +181,14 @@ export class CanvasRenderer {
       straight: COLORS.straight,
       spiral: COLORS.straight,
       arc: COLORS.straight,
-      clothoid: COLORS.straight
+      clothoid: COLORS.straight,
+      connection: COLORS.straight // 接続線
     } : {
       straight: COLORS.straight,
       spiral: COLORS.spiral,
       arc: COLORS.arc,
-      clothoid: COLORS.clothoid
+      clothoid: COLORS.clothoid,
+      connection: COLORS.straight // 接続線は直線色
     }
     
     // 新しいセグメント構造かチェック

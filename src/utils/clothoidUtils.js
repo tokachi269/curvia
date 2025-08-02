@@ -176,6 +176,9 @@ export function calculateSingleClothoid(points, radius, spiralLength = null, def
     // §9.8 TS座標
     const tx = Math.cos(Az_in)
     const ty = Math.sin(Az_in)
+    
+    // TS座標をP1から入口方向（P0方向）に計算
+    // Az_inはP0→P1の方向なので、TSはP1からTs分だけ戻った位置
     const TS = {
       x: P1.x - Ts * tx,
       y: P1.y - Ts * ty
@@ -207,10 +210,14 @@ export function calculateSingleClothoid(points, radius, spiralLength = null, def
     
     // §9.12 ST座標（出口スパイラル）
     const Az_CS = Az_SC + sgn * defl_c
-    const ST_local = { x: Xc, y: -sgn * Yc }
+    
+    // ST座標をP1から出口方向に計算
+    // Az_outはP1→P2の方向なので、STはP1からTs分進んだ位置
+    const tx_out = Math.cos(Az_out)
+    const ty_out = Math.sin(Az_out)
     const ST = {
-      x: CS.x + ST_local.x * Math.cos(Az_CS) - ST_local.y * Math.sin(Az_CS),
-      y: CS.y + ST_local.x * Math.sin(Az_CS) + ST_local.y * Math.cos(Az_CS)
+      x: P1.x + Ts * tx_out,
+      y: P1.y + Ts * ty_out
     }
     
     debugInfo += formatDebugInfo('制御点座標', {
