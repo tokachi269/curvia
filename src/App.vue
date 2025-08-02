@@ -34,8 +34,65 @@
         </div>
 
         <div class="panel">
+          <h3>背景画像</h3>
+          <div class="image-controls">
+            <div class="param-row-compact">
+              <input type="file" ref="imageInput" @change="handleImageLoad" accept="image/*" class="file-input">
+              <button v-if="backgroundImage" @click="clearImage" class="clear-btn">削除</button>
+            </div>
+            
+            <div v-if="backgroundImage" class="param-row-compact">
+              <label class="checkbox-item">
+                <input type="checkbox" v-model="showBackgroundImage" @change="updateCanvas">
+                <span>画像を表示</span>
+              </label>
+            </div>
+            
+            <div v-if="backgroundImage" class="image-settings">
+              <div class="param-row-compact">
+                <label>X座標</label>
+                <input type="number" v-model.number="imageSettings.x" @input="updateCanvas" class="param-input-compact" step="10">
+                <span>px</span>
+              </div>
+              
+              <div class="param-row-compact">
+                <label>Y座標</label>
+                <input type="number" v-model.number="imageSettings.y" @input="updateCanvas" class="param-input-compact" step="10">
+                <span>px</span>
+              </div>
+              
+              <div class="param-row-compact">
+                <label>スケール</label>
+                <input type="number" v-model.number="imageSettings.scale" @input="updateCanvas" class="param-input-compact" min="0.1" max="5" step="0.1">
+                <span>×</span>
+              </div>
+              
+              <div class="param-row-compact">
+                <label>透過度</label>
+                <input type="range" v-model.number="imageSettings.opacity" @input="updateCanvas" class="opacity-slider" min="0" max="1" step="0.1">
+                <span>{{ Math.round(imageSettings.opacity * 100) }}%</span>
+              </div>
+              
+              <div class="param-row-compact">
+                <label class="checkbox-item">
+                  <input type="checkbox" v-model="imageSettings.flipX" @change="updateCanvas">
+                  <span>水平反転</span>
+                </label>
+              </div>
+              
+              <div class="param-row-compact">
+                <label class="checkbox-item">
+                  <input type="checkbox" v-model="imageSettings.flipY" @change="updateCanvas">
+                  <span>垂直反転</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
           <h3>制御点設定</h3>
-          <label>
+          <label class="checkbox-item">
             <input type="checkbox" v-model="isLoopMode" @change="updateCurve">
             <span>ループモード</span>
           </label>
@@ -53,10 +110,6 @@
           </div>
           <!-- デフォルト設定を制御点設定内に統合 -->
           <div v-if="showDefaultSettings" class="compact-controls">
-            <div class="param-row-compact">
-
-            </div>
-
             <div class="param-row-compact">
               <label>半径</label>
               <input type="number" v-model.number="defaultRadius" min="10" max="500" step="5"
@@ -218,6 +271,7 @@ export default {
   name: 'App',
   setup() {
     const canvas = ref(null)
+    const imageInput = ref(null)
     const showGrid = ref(true)
     const lineOnlyMode = ref(false)
     const fillInsideMode = ref(false) // 曲線内塗りつぶしモード
@@ -229,6 +283,18 @@ export default {
     const selectedPoint = ref(-1)
     const showDefaultSettings = ref(false) // デフォルト設定パネル表示フラグ
     const showLegend = ref(true) // 凡例表示フラグ
+
+    // 背景画像関連
+    const backgroundImage = ref(null)
+    const showBackgroundImage = ref(true) // 画像表示切り替えフラグ
+    const imageSettings = ref({
+      x: 0,
+      y: 0,
+      scale: 1.0,
+      opacity: 0.5,
+      flipX: false,
+      flipY: false
+    })
 
     // 緩和曲線制御パラメータ
     const defaultRadius = ref(100)
@@ -285,8 +351,50 @@ export default {
         showRadiusLines: !lineOnlyMode.value,
         isLoopMode: isLoopMode.value,
         debugMode: debugMode.value,
-        overlapResults: overlapResults
+        overlapResults: overlapResults,
+        backgroundImage: backgroundImage.value && showBackgroundImage.value ? backgroundImage.value : null,
+        imageSettings: imageSettings.value
       })
+    }
+
+    // 画像ファイルの読み込み処理
+    const handleImageLoad = (event) => {
+      const file = event.target.files[0]
+      if (!file) return
+
+      // 既に画像が設定されている場合は確認
+      if (backgroundImage.value) {
+        if (!confirm('現在の画像を新しい画像に変更してもよろしいですか？')) {
+          // キャンセルされた場合、ファイル入力をリセット
+          event.target.value = ''
+          return
+        }
+      }
+
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const img = new Image()
+        img.onload = () => {
+          backgroundImage.value = img
+          showBackgroundImage.value = true // 画像読み込み時に表示を有効化
+          // 画像の中央に配置
+          imageSettings.value.x = -img.width / 2
+          imageSettings.value.y = -img.height / 2
+          updateCanvas()
+        }
+        img.src = e.target.result
+      }
+      reader.readAsDataURL(file)
+    }
+
+    // 画像をクリア
+    const clearImage = () => {
+      if (confirm('背景画像を削除してもよろしいですか？')) {
+        backgroundImage.value = null
+        showBackgroundImage.value = false // 表示フラグもリセット
+        imageInput.value.value = ''
+        updateCanvas()
+      }
     }
 
     // 曲線を再計算・再描画
@@ -338,7 +446,9 @@ export default {
           showRadiusLines: !lineOnlyMode.value,
           isLoopMode: isLoopMode.value,
           debugMode: debugMode.value,
-          overlapResults: null
+          overlapResults: null,
+          backgroundImage: backgroundImage.value && showBackgroundImage.value ? backgroundImage.value : null,
+          imageSettings: imageSettings.value
         })
 
         // エラーメッセージをオーバーレイで表示
@@ -392,7 +502,9 @@ export default {
         showRadiusLines: !lineOnlyMode.value,
         isLoopMode: isLoopMode.value,
         debugMode: debugMode.value,
-        overlapResults: overlapResults
+        overlapResults: overlapResults,
+        backgroundImage: backgroundImage.value && showBackgroundImage.value ? backgroundImage.value : null,
+        imageSettings: imageSettings.value
       })
     }
 
@@ -706,6 +818,44 @@ export default {
           x: coords.x - points.value[pointIndex].x,
           y: coords.y - points.value[pointIndex].y
         }
+        
+        // ドラッグ中は文書全体でマウスイベントを監視
+        document.addEventListener('mousemove', handleDocumentMouseMove)
+        document.addEventListener('mouseup', handleDocumentMouseUp)
+      }
+    }
+
+    // 文書全体でのマウス移動ハンドラー（ドラッグ中専用）
+    const handleDocumentMouseMove = (event) => {
+      if (isDragging.value) {
+        // キャンバス座標に変換
+        const rect = canvas.value.getBoundingClientRect()
+        const canvasX = (event.clientX - rect.left - panX.value) / zoom.value
+        const canvasY = (event.clientY - rect.top - panY.value) / zoom.value
+        
+        const newX = canvasX - dragOffset.value.x
+        const newY = canvasY - dragOffset.value.y
+
+        // 既存のプロパティを保持しながら座標を更新
+        points.value[dragPointIndex.value] = {
+          ...points.value[dragPointIndex.value],
+          x: newX,
+          y: newY
+        }
+        updateCurve()
+      }
+    }
+
+    // 文書全体でのマウスアップハンドラー（ドラッグ中専用）
+    const handleDocumentMouseUp = () => {
+      if (isDragging.value) {
+        isDragging.value = false
+        dragPointIndex.value = -1
+        canvas.value.style.cursor = 'crosshair'
+        
+        // 文書レベルのイベントリスナーを削除
+        document.removeEventListener('mousemove', handleDocumentMouseMove)
+        document.removeEventListener('mouseup', handleDocumentMouseUp)
       }
     }
 
@@ -721,18 +871,8 @@ export default {
         return
       }
 
-      // 制御点ドラッグ中
+      // ドラッグ中は文書レベルで処理するため、ここでは何もしない
       if (isDragging.value) {
-        const newX = coords.x - dragOffset.value.x
-        const newY = coords.y - dragOffset.value.y
-
-        // 既存のプロパティを保持しながら座標を更新
-        points.value[dragPointIndex.value] = {
-          ...points.value[dragPointIndex.value],
-          x: newX,
-          y: newY
-        }
-        updateCurve()
         return
       }
 
@@ -762,7 +902,9 @@ export default {
                   showRadiusLines: !lineOnlyMode.value,
                   isLoopMode: isLoopMode.value,
                   debugMode: debugMode.value,
-                  overlapResults: overlapResults
+                  overlapResults: overlapResults,
+                  backgroundImage: backgroundImage.value && showBackgroundImage.value ? backgroundImage.value : null,
+                  imageSettings: imageSettings.value
                 })
               }
             })
@@ -793,7 +935,9 @@ export default {
                   showRadiusLines: !lineOnlyMode.value,
                   isLoopMode: isLoopMode.value,
                   debugMode: debugMode.value,
-                  overlapResults: overlapResults
+                  overlapResults: overlapResults,
+                  backgroundImage: backgroundImage.value && showBackgroundImage.value ? backgroundImage.value : null,
+                  imageSettings: imageSettings.value
                 })
               }
             })
@@ -816,7 +960,9 @@ export default {
                     showRadiusLines: !lineOnlyMode.value,
                     isLoopMode: isLoopMode.value,
                     debugMode: debugMode.value,
-                    overlapResults: overlapResults
+                    overlapResults: overlapResults,
+                    backgroundImage: backgroundImage.value && showBackgroundImage.value ? backgroundImage.value : null,
+                    imageSettings: imageSettings.value
                   })
                 }
               })
@@ -851,7 +997,9 @@ export default {
               showRadiusLines: !lineOnlyMode.value,
               isLoopMode: isLoopMode.value,
               debugMode: debugMode.value,
-              overlapResults: overlapResults
+              overlapResults: overlapResults,
+              backgroundImage: backgroundImage.value && showBackgroundImage.value ? backgroundImage.value : null,
+              imageSettings: imageSettings.value
             })
           }
         })
@@ -974,13 +1122,17 @@ export default {
       document.body.style.overflow = 'hidden'
     })
 
-    // アンマウント時にスクロール復元
+    // アンマウント時にスクロール復元とイベントリスナークリーンアップ
     onUnmounted(() => {
       document.body.style.overflow = 'auto'
+      // 文書レベルのイベントリスナーをクリーンアップ
+      document.removeEventListener('mousemove', handleDocumentMouseMove)
+      document.removeEventListener('mouseup', handleDocumentMouseUp)
     })
 
     return {
       canvas,
+      imageInput,
       showGrid,
       lineOnlyMode,
       fillInsideMode,
@@ -989,6 +1141,9 @@ export default {
       debugMode, // デバッグモードを追加
       showDefaultSettings, // デフォルト設定パネル表示フラグを追加
       showLegend, // 凡例表示フラグを追加
+      backgroundImage, // 背景画像を追加
+      imageSettings, // 画像設定を追加
+      showBackgroundImage, // 背景画像表示切り替えを追加
       points,
       selectedPoint,
       defaultRadius,
@@ -1015,7 +1170,10 @@ export default {
       zoomOut,
       resetZoom,
       resetPan,
-      updateCanvasTransform
+      updateCanvasTransform,
+      handleImageLoad, // 画像読み込み関数を追加
+      clearImage, // 画像削除関数を追加
+      applyDefaultToAllSimple
     }
   }
 }
@@ -1066,8 +1224,51 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  overflow-y: auto;
+  overflow-y: scroll; /* autoからscrollに変更 */
   max-height: 100%;
+  scrollbar-gutter: stable; /* スクロールバー領域を常に確保 */
+  /* 内側にpadding-rightを追加してスクロールバー領域を確保 */
+  padding-right: 4px;
+  box-sizing: border-box;
+}
+
+/* サイドバーのスクロールバーを常に表示 */
+.sidebar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 4px;
+  min-height: 20px; /* 最小サイズを設定 */
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background: #bbb;
+}
+
+/* Firefox用のスクロールバー設定とWebKit追加設定 */
+.sidebar {
+  scrollbar-width: thin;
+  scrollbar-color: #ccc #f1f1f1;
+}
+
+/* スクロールバーを強制的に常に表示 */
+.sidebar::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 4px;
+  min-height: 20px; /* 最小サイズを設定 */
+  /* 常に表示されるように透明度を調整 */
+  opacity: 1;
+}
+
+.sidebar::-webkit-scrollbar-thumb:window-inactive {
+  background: #ccc; /* 非アクティブ時も表示 */
 }
 
 .main-content {
@@ -1380,6 +1581,7 @@ export default {
   width: 100%;
   height: 100%;
   position: relative;
+  overflow: hidden; /* オーバーフローを隠す */
 }
 
 .canvas-header {
@@ -1404,7 +1606,7 @@ export default {
 canvas {
   display: block;
   width: 100%;
-  height: calc(100vh - 120px);
+  height: 100%;
   background: #ffffff;
   cursor: crosshair;
 }
@@ -1497,7 +1699,7 @@ canvas {
   }
 
   canvas {
-    height: 400px;
+    height: 100%;
   }
 }
 
@@ -1507,7 +1709,7 @@ canvas {
   }
 
   canvas {
-    height: 600px;
+    height: 100%;
   }
 }
 
@@ -1532,11 +1734,13 @@ canvas {
 /* キャンバスオーバーレイコントロール */
 .canvas-overlay-controls {
   position: absolute;
+  top: 10px;
   right: 220px;
   /* 凡例の左側に配置 */
   z-index: 20;
   display: flex;
   gap: 8px;
+  pointer-events: none; /* ドラッグ時の干渉を防ぐ */
 }
 
 .overlay-btn {
@@ -1548,6 +1752,7 @@ canvas {
   cursor: pointer;
   transition: all 0.2s;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  pointer-events: auto; /* ボタン自体はクリック可能 */
 }
 
 .overlay-btn:hover {
@@ -1558,6 +1763,7 @@ canvas {
 /* 凡例オーバーレイ */
 .legend-overlay {
   position: absolute;
+  top: 10px;
   right: 10px;
   /* 右寄せに変更 */
   background: rgba(255, 255, 255, 0.95);
@@ -1569,6 +1775,7 @@ canvas {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   max-width: 180px;
   min-width: 120px;
+  pointer-events: none; /* ドラッグ時の干渉を防ぐ */
 }
 
 .legend-header {
@@ -1580,6 +1787,7 @@ canvas {
   background: rgba(248, 249, 250, 0.95);
   border-bottom: 1px solid #ddd;
   border-radius: 6px 6px 0 0;
+  pointer-events: auto; /* ヘッダーはクリック可能 */
 }
 
 .legend-header:hover {
@@ -1730,5 +1938,62 @@ canvas {
 
 .param-info.disabled {
   opacity: 0.4;
+}
+
+/* 画像設定関連のスタイル */
+.image-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.file-input {
+  font-size: 11px;
+  padding: 2px;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  flex: 1;
+}
+
+.clear-btn {
+  padding: 2px 6px;
+  background: #d4342c;
+  color: white;
+  border: none;
+  border-radius: 2px;
+  font-size: 10px;
+  cursor: pointer;
+  margin-left: 4px;
+}
+
+.clear-btn:hover {
+  background: #b8302a;
+}
+
+.image-settings {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #eee;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.opacity-slider {
+  flex: 1;
+  margin: 0 8px;
+}
+
+.param-row-compact .checkbox-item {
+  margin: 0;
+  gap: 4px;
+}
+
+.param-row-compact .checkbox-item input[type="checkbox"] {
+  margin: 0;
+}
+
+.param-row-compact .checkbox-item span {
+  font-size: 11px;
 }
 </style>

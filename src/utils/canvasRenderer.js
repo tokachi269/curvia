@@ -51,6 +51,44 @@ export class CanvasRenderer {
     this.panY = panY
   }
 
+  // 背景画像を描画
+  drawBackgroundImage(image, settings) {
+    // 透過度が0の場合は描画しない
+    if (settings.opacity === 0) {
+      return
+    }
+    
+    this.ctx.save()
+    
+    // キャンバス変換を適用
+    this.applyTransform()
+    
+    // 透過度を設定
+    this.ctx.globalAlpha = settings.opacity || 0.5
+    
+    // スケールと反転を計算
+    const scaleX = settings.flipX ? -settings.scale : settings.scale
+    const scaleY = settings.flipY ? -settings.scale : settings.scale
+    
+    // 反転時の位置調整
+    const x = settings.flipX ? settings.x + image.width * settings.scale : settings.x
+    const y = settings.flipY ? settings.y + image.height * settings.scale : settings.y
+    
+    // 変換を適用
+    this.ctx.scale(scaleX, scaleY)
+    
+    // 画像を描画
+    this.ctx.drawImage(
+      image,
+      x / scaleX,
+      y / scaleY,
+      image.width,
+      image.height
+    )
+    
+    this.ctx.restore()
+  }
+
   applyTransform() {
     this.ctx.setTransform(this.zoom, 0, 0, this.zoom, this.panX, this.panY)
   }
@@ -790,12 +828,20 @@ export class CanvasRenderer {
       showRadiusLines = false,
       isLoopMode = false,
       debugMode = false,
-      overlapResults = null
+      overlapResults = null,
+      backgroundImage = null,
+      imageSettings = null
     } = options
 
-    logger.curve.debug(`render() 呼び出し curve:${curve ? `${curve.length}点` : 'null'} clothoidData:${clothoidData ? '存在' : 'null'} segments:${clothoidData?.segments ? `${clothoidData.segments.length}個` : 'なし'} fillInside:${fillInsideMode} preview:${previewPoint ? '有' : '無'}`)
+    logger.curve.debug(`render() 呼び出し curve:${curve ? `${curve.length}点` : 'null'} clothoidData:${clothoidData ? '存在' : 'null'} segments:${clothoidData?.segments ? `${clothoidData.segments.length}個` : 'なし'} fillInside:${fillInsideMode} preview:${previewPoint ? '有' : '無'} backgroundImage:${backgroundImage ? '有' : '無'}`)
     
     this.clear()
+    
+    // 背景画像を最初に描画
+    if (backgroundImage && imageSettings) {
+      this.drawBackgroundImage(backgroundImage, imageSettings)
+    }
+    
     if (showGrid) {
       this.drawGrid()
     }
