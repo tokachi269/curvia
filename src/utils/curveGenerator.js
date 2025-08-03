@@ -2,9 +2,23 @@ import { dist, getAngle, normalizeAngle } from './mathUtils.js'
 import { calculateSingleClothoid, generateSpiralPoints, generateArcPoints } from './clothoidUtils.js'
 import { logger, formatDebugInfo, PerformanceTimer } from './logger.js'
 import { createError, createSuccess, isError, validate, safeExecute, ERROR_CODES } from './errorHandler.js'
+import { getUnifiedLabelIndex } from './loopProtection.js'
 
-// 統一曲線生成システムのコア関数をエクスポート
-export { generateUnifiedCurve, CURVE_TYPES }
+// ========================================
+// セグメントインデックス定数（保守性向上）
+// ========================================
+const SEGMENT_INDEX = {
+  FIRST: 0,   // 最初のセグメント（P1の角を処理、TS1を含む）
+  SECOND: 1,  // 2番目のセグメント（P2の角を処理、TS2を含む）
+  THIRD: 2    // 3番目のセグメント（P0の角を処理、ST0を含む）
+}
+
+// ループ接続の仕様を明確化
+const LOOP_CONNECTION_SPEC = {
+  SOURCE_POINT: 'ST0',      // ループ開始点（最後のセグメントのST - P0の角処理セグメント）
+  TARGET_POINT: 'TS1',      // ループ終了点（最初のセグメントのTS - P1の角処理セグメント）
+  CONNECTION_TYPE: 'loop-connection'
+}
 
 // ========================================
 // 緩和曲線生成システム - メインエントリーポイント
@@ -155,6 +169,22 @@ function processAllSegments(points, isLoop, defaultSpiralFactor, debugInfo) {
       )
       if (finalLineResult.pointsAdded > 0) {
         allCurvePoints.push(...finalLineResult.straightPoints)
+        
+        // 最終直線をセグメントとして追加
+        const finalLineSegment = {
+          segmentIndex: `${i + 1}-final`,
+          type: 'straight',
+          isLine: true,
+          curve: finalLineResult.straightPoints,
+          points: finalLineResult.straightPoints,
+          drawingSegments: [{ 
+            type: 'straight', 
+            points: finalLineResult.straightPoints 
+          }],
+          startPoint: finalLineResult.straightPoints[0],
+          endPoint: finalLineResult.straightPoints[finalLineResult.straightPoints.length - 1]
+        }
+        segments.push(finalLineSegment)
       }
     }
 
@@ -222,7 +252,7 @@ function processSingleSegment(points, segmentIndex, segmentCount, isLoop, defaul
   const curveToAdd = adjustSegmentCurve(segmentData, segmentIndex)
 
   // セグメント情報を作成
-  const segmentInfo = createSegmentInfo(segmentData, segmentIndex, segmentCount, isLoop)
+  const segmentInfo = createSegmentInfo(segmentData, segmentIndex, segmentCount, isLoop, points)
 
   return createSuccess({
     segmentData,
@@ -320,30 +350,48 @@ function adjustSegmentCurve(segmentData, segmentIndex) {
 }
 
 /**
- * セグメント情報を作成
+ * セグメント情報を作成（レンダリング対応強化）
  */
-function createSegmentInfo(segmentData, segmentIndex, segmentCount, isLoop) {
+function createSegmentInfo(segmentData, segmentIndex, segmentCount, isLoop, points) {
   if (!segmentData.clothoidData) {
     return null
   }
 
-  const labelIndex = (isLoop && segmentIndex === segmentCount - 1) ? 0 : segmentIndex + 1
+  // 【統一化】統一されたラベルインデックス計算を使用
+  const labelIndex = getUnifiedLabelIndex(segmentIndex, points.length, isLoop)
+
+  logger.curve.debug(`セグメント${segmentIndex}ラベル生成: isLoop=${isLoop}, segmentIndex=${segmentIndex}, labelIndex=${labelIndex}, pointsLength=${points.length}`)
+
+  // ループモードでの追加デバッグ情報
+  if (isLoop) {
+    const processedPointIndex = (segmentIndex + 1) % points.length
+    logger.curve.debug(`ループモード対応: セグメント${segmentIndex} → P${processedPointIndex}の角を処理 → ラベル番号${labelIndex}`)
+  }
 
   return {
-    segmentIndex: segmentIndex + 1,
+    segmentIndex: segmentIndex, // 0ベースインデックスを保持（検索用）
     type: 'clothoid',
+    // 座標情報
     TS: segmentData.clothoidData.actualTS || segmentData.clothoidData.TS,
     ST: segmentData.clothoidData.actualST || segmentData.clothoidData.ST,
     SC: segmentData.clothoidData.SC,
     CS: segmentData.clothoidData.CS,
     center: segmentData.clothoidData.center || segmentData.clothoidData.actualCenter,
     radius: segmentData.clothoidData.radius,
+    // ラベル情報（表示用、正しい番号付け）
     TSLabel: `TS${labelIndex}`,
     STLabel: `ST${labelIndex}`,
     SCLabel: `SC${labelIndex}`,
     CSLabel: `CS${labelIndex}`,
+    // レンダリング用データ（確実に描画されるよう）
     curve: segmentData.curve || [],
-    drawingSegments: segmentData.clothoidData.segments || []
+    drawingSegments: segmentData.clothoidData.segments || [],
+    // レンダリング設定
+    renderSettings: {
+      color: 'clothoid',
+      lineWidth: 3,
+      visible: true
+    }
   }
 }
 
@@ -352,7 +400,7 @@ function createSegmentInfo(segmentData, segmentIndex, segmentCount, isLoop) {
 // ========================================
 
 /**
- * セグメント間接続線を追加
+ * セグメント間接続線を追加（確実な生成）
  */
 function addSegmentConnection(previousST, currentTS, segmentIndex, allCurvePoints, curveToAdd, segments) {
   const connectionDistance = Math.hypot(currentTS.x - previousST.x, currentTS.y - previousST.y)
@@ -360,6 +408,7 @@ function addSegmentConnection(previousST, currentTS, segmentIndex, allCurvePoint
   logger.curve.debug(`ST${segmentIndex}-TS${segmentIndex + 1}接続チェック: 距離:${connectionDistance.toFixed(3)}m`)
   
   if (connectionDistance <= 0.1) {
+    logger.curve.debug(`接続線スキップ: 距離が小さい ${connectionDistance.toFixed(3)}m`)
     return { pointsAdded: 0 }
   }
 
@@ -369,14 +418,25 @@ function addSegmentConnection(previousST, currentTS, segmentIndex, allCurvePoint
     segmentIndex: `${segmentIndex}-${segmentIndex + 1}`,
     type: 'connection',
     isLine: true,
+    // レンダリング確実化のため複数のデータ形式を提供
     curve: connectionPoints,
-    drawingSegments: [{ type: 'straight', points: connectionPoints }],
+    points: connectionPoints, // 旧形式互換
+    drawingSegments: [{ 
+      type: 'straight', 
+      points: connectionPoints 
+    }],
     startPoint: previousST,
-    endPoint: currentTS
+    endPoint: currentTS,
+    // レンダリング設定
+    renderSettings: {
+      color: 'connection',
+      lineWidth: 3,
+      visible: true
+    }
   }
   
   segments.push(connectionSegment)
-  logger.curve.info(`ST${segmentIndex}-TS${segmentIndex + 1}間接続線追加: ${connectionDistance.toFixed(3)}m, ${connectionPoints.length - 1}点`)
+  logger.curve.info(`ST${segmentIndex}-TS${segmentIndex + 1}間接続線追加: ${connectionDistance.toFixed(3)}m, ${connectionPoints.length}点`)
 
   return { 
     pointsAdded: connectionPoints.length - 1,
@@ -415,51 +475,119 @@ function addFinalStraightLine(segmentData, points, allCurvePoints) {
   logger.curve.debug(`最終直線追加: STから最終点まで ${stToFinalDistance.toFixed(2)}m`)
 
   return { 
-    pointsAdded: straightSteps,
-    straightPoints: straightPoints.slice(1) // 最初の点（lastST）は重複するのでスキップ
+    pointsAdded: straightPoints.length,
+    straightPoints: straightPoints // ST座標を含む完全な直線
   }
 }
 
 /**
- * ループ接続線を追加
+ * ループ接続の入力検証（保守性向上）
+ */
+function validateLoopConnectionInput(segments) {
+  if (!segments || segments.length === 0) {
+    return { valid: false, reason: 'セグメント配列が空です' }
+  }
+
+  const clothoidSegments = segments.filter(seg => seg.type === 'clothoid')
+  if (clothoidSegments.length === 0) {
+    return { valid: false, reason: 'clothoidセグメントが見つかりません' }
+  }
+
+  // ST0を持つセグメント（P0の角を処理するセグメント）を検索
+  const lastSegmentIndex = Math.max(...segments.filter(s => s.type === 'clothoid').map(s => s.segmentIndex))
+  const sourceSegment = segments.find(seg => seg.type === 'clothoid' && seg.segmentIndex === lastSegmentIndex)
+  
+  if (!sourceSegment) {
+    return { valid: false, reason: `ST0を持つセグメント(index=${lastSegmentIndex})が見つかりません` }
+  }
+
+  if (!sourceSegment.ST) {
+    return { valid: false, reason: `${LOOP_CONNECTION_SPEC.SOURCE_POINT}座標が見つかりません` }
+  }
+
+  return { valid: true }
+}
+
+/**
+ * ループ接続線を追加（確実な生成）
  */
 function addLoopConnections(segments, allCurvePoints) {
-  if (segments.length < 1) {
+  // 入力検証を追加
+  const validation = validateLoopConnectionInput(segments)
+  if (!validation.valid) {
+    logger.curve.warn(`ループ接続: ${validation.reason}`)
     return { connectionAdded: false }
   }
 
-  const firstSegment = segments.find(seg => seg.type === 'clothoid' && seg.segmentIndex === 1)
-  const secondSegment = segments.find(seg => seg.type === 'clothoid' && seg.segmentIndex === 2)
+  // セグメント検索を定数で明確化
+  logger.curve.debug('ループ接続: セグメント検索開始', {
+    全セグメント数: segments.length,
+    clothoidセグメント: segments.filter(s => s.type === 'clothoid').map(s => `index:${s.segmentIndex}`)
+  })
 
-  if (!firstSegment?.ST) {
+  // ST0を持つセグメント（P0の角を処理するセグメント、通常は最後のセグメント）を探す
+  const lastSegmentIndex = Math.max(...segments.filter(s => s.type === 'clothoid').map(s => s.segmentIndex))
+  const sourceSegment = segments.find(seg => seg.type === 'clothoid' && seg.segmentIndex === lastSegmentIndex)
+  
+  // TS1を持つセグメント（P1の角を処理するセグメント、通常は最初のセグメント）を探す
+  const targetSegment = segments.find(seg => seg.type === 'clothoid' && seg.segmentIndex === SEGMENT_INDEX.FIRST)
+
+  logger.curve.debug('ループ接続: セグメント検索結果', {
+    sourceSegment: sourceSegment ? `found(index:${sourceSegment.segmentIndex})` : 'not found',
+    targetSegment: targetSegment ? `found(index:${targetSegment.segmentIndex})` : 'not found',
+    sourceST: sourceSegment?.ST ? `(${sourceSegment.ST.x.toFixed(2)}, ${sourceSegment.ST.y.toFixed(2)})` : 'none'
+  })
+
+  if (!sourceSegment?.ST) {
+    logger.curve.warn(`ループ接続: ST0を持つセグメント(index=${lastSegmentIndex})のST座標が見つかりません`)
     return { connectionAdded: false }
   }
 
-  const targetSegment = secondSegment || firstSegment
-  const targetTS = targetSegment.TS
+  // ST0 → TS1 の接続（仕様明確化）
+  const targetTS = targetSegment?.TS
 
   if (!targetTS) {
+    logger.curve.warn(`ループ接続: ターゲット${LOOP_CONNECTION_SPEC.TARGET_POINT}座標が見つかりません`)
     return { connectionAdded: false }
   }
 
-  const firstST = firstSegment.ST
-  const connectionDistance = Math.hypot(targetTS.x - firstST.x, targetTS.y - firstST.y)
+  const sourceST = sourceSegment.ST
+  const connectionDistance = Math.hypot(targetTS.x - sourceST.x, targetTS.y - sourceST.y)
 
-  logger.curve.debug(`ループST0接続追加: 距離:${connectionDistance.toFixed(3)}m`)
+  // ログに明確な仕様を記録
+  logger.curve.info(`${LOOP_CONNECTION_SPEC.SOURCE_POINT}→${LOOP_CONNECTION_SPEC.TARGET_POINT}接続生成: ${LOOP_CONNECTION_SPEC.SOURCE_POINT}(${sourceST.x.toFixed(2)}, ${sourceST.y.toFixed(2)}) → ${LOOP_CONNECTION_SPEC.TARGET_POINT}(${targetTS.x.toFixed(2)}, ${targetTS.y.toFixed(2)}) 距離:${connectionDistance.toFixed(3)}m`)
 
-  const connectionPoints = generateConnectionPoints(firstST, targetTS, connectionDistance)
+  const connectionPoints = generateConnectionPoints(sourceST, targetTS, connectionDistance)
 
   const connectionSegment = {
-    segmentIndex: secondSegment ? `0-1` : `0-0`,
-    type: 'loop-connection',
+    segmentIndex: `${lastSegmentIndex}-${SEGMENT_INDEX.FIRST}`, // ST0からTS1への接続
+    type: LOOP_CONNECTION_SPEC.CONNECTION_TYPE,
     isLine: true,
+    // レンダリング確実化のため複数のデータ形式を提供
     curve: connectionPoints,
-    drawingSegments: [{ type: 'straight', points: connectionPoints }],
-    startPoint: firstST,
-    endPoint: targetTS
+    points: connectionPoints, // 旧形式互換
+    drawingSegments: [{ 
+      type: 'straight', 
+      points: connectionPoints 
+    }],
+    startPoint: sourceST,
+    endPoint: targetTS,
+    // レンダリング設定
+    renderSettings: {
+      color: LOOP_CONNECTION_SPEC.CONNECTION_TYPE,
+      lineWidth: 3,
+      visible: true,
+      priority: 'high' // 高優先度で描画
+    },
+    // メタデータ（デバッグ用）
+    metadata: {
+      sourceSegment: sourceSegment.segmentIndex,
+      targetSegment: targetSegment.segmentIndex,
+      specification: `${LOOP_CONNECTION_SPEC.SOURCE_POINT}→${LOOP_CONNECTION_SPEC.TARGET_POINT}`
+    }
   }
 
-  logger.curve.info(`ループST0接続線追加: ${connectionDistance.toFixed(3)}m, ${connectionPoints.length}点`)
+  logger.curve.info(`${LOOP_CONNECTION_SPEC.SOURCE_POINT}→${LOOP_CONNECTION_SPEC.TARGET_POINT}接続線生成完了: ${connectionDistance.toFixed(3)}m, ${connectionPoints.length}点`)
 
   return {
     connectionAdded: true,
@@ -549,7 +677,7 @@ function isStraightLine(deltaAngle, tolerance = 0.0017) {
 // 全ての曲線タイプを統一的に処理する中核システム
 
 // 曲線タイプ列挙
-const CURVE_TYPES = {
+export const CURVE_TYPES = {
   CLOTHOID: 'clothoid',
   STRAIGHT: 'straight'
 }
@@ -560,7 +688,7 @@ const CURVE_TYPES = {
  * @param {Object} options - オプション設定
  * @returns {Object} 曲線データ
  */
-function generateUnifiedCurve(points, options = {}) {
+export function generateUnifiedCurve(points, options = {}) {
   const config = {
     radius: null,
     spiralLength: null,

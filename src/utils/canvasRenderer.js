@@ -1,4 +1,32 @@
 import { logger } from './logger.js'
+import { 
+  safeForEach, 
+  LightSegmentValidator, 
+  safeGetElement, 
+  getUnifiedLabelIndex 
+} from './loopProtection.js'
+
+// ========================================
+// 描画データ構造の定義（統一化）
+// ========================================
+
+/**
+ * 統一描画セグメント構造
+ * @typedef {Object} RenderSegment
+ * @property {string} type - セグメントタイプ ('clothoid', 'connection', 'loop-connection')
+ * @property {Array} points - 描画点配列
+ * @property {string} color - 描画色
+ * @property {number} lineWidth - 線幅
+ * @property {Object} metadata - メタデータ（ラベル、座標情報など）
+ */
+
+/**
+ * 統一描画データ構造
+ * @typedef {Object} RenderData
+ * @property {Array<RenderSegment>} segments - 描画セグメント配列
+ * @property {Array} controlPoints - 制御点配列（TS, ST, SC, CS等）
+ * @property {Object} metadata - 全体メタデータ
+ */
 
 // 色設定を一箇所に集約（ダークモード対応準備）
 const COLORS = {
@@ -165,10 +193,21 @@ export class CanvasRenderer {
     ctx.stroke()
   }
 
+  /**
+   * 緩和曲線を描画（統一化された処理）
+   * @param {Array} segments - セグメント配列
+   * @param {Object} options - 描画オプション
+   * @returns {boolean} 描画成功フラグ
+   */
   drawClothoidCurve(segments, options = {}) {
-    if (!segments || segments.length === 0) return
+    if (!segments || segments.length === 0) return false
     
-    // デバッグ用ログ
+    // 軽量セグメント配列検証
+    if (!LightSegmentValidator.validateBasic(segments, 'drawClothoidCurve')) {
+      logger.curve.error('drawClothoidCurve: セグメント配列が無効')
+      return false
+    }
+    
     logger.curve.debug(`drawClothoidCurve - セグメント情報 ${segments.length}個`)
     
     const ctx = this.ctx
@@ -176,93 +215,161 @@ export class CanvasRenderer {
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
     
-    // 線のみ表示モードの場合は全て直線色に統一
-    const colors = options.lineOnlyMode ? {
+    // 色設定（統一化）
+    const colors = this.getSegmentColors(options.lineOnlyMode)
+    
+    // セグメント描画処理（軽量安全化）
+    let successCount = 0
+    
+    // 軽量な反復処理を使用
+    safeForEach(segments, (segment, index) => {
+      const renderSuccess = this.drawSingleSegment(segment, index, colors, options.isLoopMode)
+      if (renderSuccess) successCount++
+    }, 'drawClothoidCurve_segments')
+    
+    logger.curve.debug(`セグメント描画完了: ${successCount}/${segments.length}`)
+    return successCount > 0
+  }
+
+  /**
+   * セグメント色設定を取得（凡例に従った色分け）
+   */
+  getSegmentColors(lineOnlyMode = false) {
+    return lineOnlyMode ? {
       straight: COLORS.straight,
       spiral: COLORS.straight,
       arc: COLORS.straight,
       clothoid: COLORS.straight,
-      connection: COLORS.straight // 接続線
+      connection: COLORS.straight,
+      'loop-connection': COLORS.straight
     } : {
-      straight: COLORS.straight,
-      spiral: COLORS.spiral,
-      arc: COLORS.arc,
-      clothoid: COLORS.clothoid,
-      connection: COLORS.straight // 接続線は直線色
+      straight: COLORS.straight,        // 直線部: 青 (#5a9fd4)
+      spiral: COLORS.spiral,            // スパイラル部: 赤 (#e53e3e)
+      arc: COLORS.arc,                  // 円弧部: オレンジ (#f7931e)
+      clothoid: COLORS.clothoid,        // 緩和曲線: 赤 (#e53e3e)
+      connection: COLORS.auxiliaryLine, // 通常接続線: 薄いグレー
+      'loop-connection': COLORS.straight // ループ接続線: 直線部と同じ青色
     }
+  }
+
+  /**
+   * 単一セグメントを描画（凡例に従った統一色分け）
+   */
+  drawSingleSegment(segment, index, colors, isLoopMode = false) {
+    if (!segment) return false
     
-    // 新しいセグメント構造かチェック
-    const hasOldStructure = segments.some(seg => seg.points && seg.points.length > 0)
-    const hasDrawingSegments = segments.some(seg => seg.drawingSegments && seg.drawingSegments.length > 0)
-    const hasCurveData = segments.some(seg => seg.curve && seg.curve.length > 0)
+    const ctx = this.ctx
+    let pointsToRender = null
     
-    if (!hasOldStructure && !hasDrawingSegments && !hasCurveData) {
-      console.log('新しいセグメント構造を検出 - 描画用データなし')
-      // 新しい構造では、セグメントデータは表示情報のみで、
-      // 実際の曲線は外部の curve 配列で描画される
-      return false // 呼び出し元にフォールバックを指示
-    }
+    // セグメントタイプの判定を改善
+    let segmentType = segment.type || 'clothoid'
     
-    // 描画処理
-    segments.forEach((segment, index) => {
-      logger.curve.debug(`セグメント ${index}: ${JSON.stringify({
-        isLine: segment.isLine,
-        TS: segment.TS,
-        SC: segment.SC,
-        CS: segment.CS,
-        ST: segment.ST
-      })}`)
+    // drawingSegmentsがある場合は、その内容からタイプを判定
+    if (segment.drawingSegments && segment.drawingSegments.length > 0) {
+      // drawingSegmentsの軽量検証
+      if (!LightSegmentValidator.validateDrawingSegments(segment.drawingSegments, `segment_${index}`)) {
+        logger.curve.error(`セグメント ${index}: drawingSegments が無効`)
+        return false
+      }
       
-      let pointsToRender = null
-      let segmentType = segment.type || 'clothoid'
-      
-      // 描画用データの優先順位: points > drawingSegments > curve
-      if (segment.points && segment.points.length > 0) {
-        // 旧形式のpoints配列
-        pointsToRender = segment.points
-        logger.curve.debug(`セグメント ${index}: 旧形式points使用 (${segment.points.length}点)`)
-      } else if (segment.drawingSegments && segment.drawingSegments.length > 0) {
-        // drawingSegments内の各セグメントを個別描画
-        segment.drawingSegments.forEach((drawSeg, drawIndex) => {
-          if (drawSeg.points && drawSeg.points.length >= 2) {
-            const drawType = drawSeg.type || 'clothoid'
-            ctx.strokeStyle = colors[drawType] || '#5a9fd4'
-            ctx.beginPath()
-            ctx.moveTo(drawSeg.points[0].x, drawSeg.points[0].y)
-            
-            for (let i = 1; i < drawSeg.points.length; i++) {
-              ctx.lineTo(drawSeg.points[i].x, drawSeg.points[i].y)
-            }
-            ctx.stroke()
-            
-            logger.curve.debug(`セグメント ${index}-${drawIndex} (${drawType}) 描画完了 ${drawSeg.points.length}点`)
+      // 複数のdrawingSegmentsがある場合、それぞれを個別に描画（軽量安全化）
+      let drawSuccess = true
+      safeForEach(segment.drawingSegments, (drawSeg, segIndex) => {
+        if (drawSeg.points && drawSeg.points.length >= 2) {
+          const drawSegType = drawSeg.type || 'clothoid'
+          
+          ctx.strokeStyle = colors[drawSegType] || COLORS.straight
+          ctx.lineWidth = 3
+          ctx.lineCap = 'round'
+          ctx.lineJoin = 'round'
+          
+          ctx.beginPath()
+          ctx.moveTo(drawSeg.points[0].x, drawSeg.points[0].y)
+          
+          for (let i = 1; i < drawSeg.points.length; i++) {
+            ctx.lineTo(drawSeg.points[i].x, drawSeg.points[i].y)
           }
-        })
-        return // 個別描画完了なので次のセグメントへ
-      } else if (segment.curve && segment.curve.length > 0) {
-        // セグメント用curve配列
-        pointsToRender = segment.curve
-        logger.curve.debug(`セグメント ${index}: curve配列使用 (${segment.curve.length}点)`)
-      }
+          ctx.stroke()
+          
+          logger.curve.debug(`セグメント ${index} drawingSeg ${segIndex} (${drawSegType}) 描画完了 ${drawSeg.points.length}点`)
+        }
+      }, `segment_${index}_drawingSegments`)
       
-      if (!pointsToRender || pointsToRender.length < 2) {
-        logger.curve.debug(`セグメント ${index} をスキップ: 描画データなし`)
-        return
-      }
-      
-      ctx.strokeStyle = colors[segmentType] || '#5a9fd4'
-      ctx.beginPath()
-      ctx.moveTo(pointsToRender[0].x, pointsToRender[0].y)
-      
-      for (let i = 1; i < pointsToRender.length; i++) {
-        ctx.lineTo(pointsToRender[i].x, pointsToRender[i].y)
-      }
-      ctx.stroke()
-      
-      logger.curve.debug(`セグメント ${index} (${segmentType}) 描画完了 ${pointsToRender.length}点`)
-    })
+      return drawSuccess
+    }
     
-    return true // 正常に描画完了
+    // 描画点の取得（優先順位付き）
+    pointsToRender = this.extractRenderPoints(segment)
+    
+    if (!pointsToRender || pointsToRender.length < 2) {
+      logger.curve.debug(`セグメント ${index} をスキップ: 描画データなし`)
+      return false
+    }
+    
+    // 統一されたセグメント描画（すべて同じ太さ）
+    ctx.strokeStyle = colors[segmentType] || COLORS.straight
+    ctx.lineWidth = 3
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+    
+    ctx.beginPath()
+    ctx.moveTo(pointsToRender[0].x, pointsToRender[0].y)
+    
+    for (let i = 1; i < pointsToRender.length; i++) {
+      ctx.lineTo(pointsToRender[i].x, pointsToRender[i].y)
+    }
+    ctx.stroke()
+    
+    logger.curve.debug(`セグメント ${index} (${segmentType}) 描画完了 ${pointsToRender.length}点`)
+    return true
+  }
+
+  /**
+   * セグメントから描画点を抽出（統一化）
+   */
+  extractRenderPoints(segment) {
+    // 優先順位: curve > drawingSegments > points
+    if (segment.curve && segment.curve.length > 0) {
+      return segment.curve
+    }
+    
+    if (segment.drawingSegments && segment.drawingSegments.length > 0) {
+      // drawingSegmentsの場合は個別描画が必要
+      return this.flattenDrawingSegments(segment.drawingSegments)
+    }
+    
+    if (segment.points && segment.points.length > 0) {
+      return segment.points
+    }
+    
+    return null
+  }
+
+  /**
+   * drawingSegmentsを平坦化（軽量化）
+   */
+  flattenDrawingSegments(drawingSegments) {
+    // 軽量検証
+    if (!LightSegmentValidator.validateDrawingSegments(drawingSegments, 'flattenDrawingSegments')) {
+      logger.curve.error('flattenDrawingSegments: drawingSegments が無効')
+      return null
+    }
+    
+    const allPoints = []
+    
+    // 軽量な反復処理を使用
+    safeForEach(drawingSegments, (drawSeg, index) => {
+      if (drawSeg.points && drawSeg.points.length >= 2) {
+        if (index === 0) {
+          allPoints.push(...drawSeg.points)
+        } else {
+          // 重複回避で最初の点をスキップ
+          allPoints.push(...drawSeg.points.slice(1))
+        }
+      }
+    }, 'flattenDrawingSegments_processing')
+    
+    return allPoints.length > 0 ? allPoints : null
   }
 
   drawControlLines() {
@@ -470,7 +577,7 @@ export class CanvasRenderer {
     })
   }
 
-  drawClothoidControlPoints(clothoidData, showRadiusLines = false) {
+  drawClothoidControlPoints(clothoidData, showRadiusLines = false, isLoopMode = false) {
     if (!clothoidData || clothoidData.isLine) return
     
     const ctx = this.ctx
@@ -482,7 +589,7 @@ export class CanvasRenderer {
     
     // 複数点の場合
     if (clothoidData.isMultiPoint || clothoidData.segments) {
-      this.drawMultiPointClothoidControlPoints(clothoidData, showRadiusLines)
+      this.drawMultiPointClothoidControlPoints(clothoidData, showRadiusLines, isLoopMode)
       return
     }
     
@@ -558,43 +665,161 @@ export class CanvasRenderer {
     }
   }
 
-  drawMultiPointClothoidControlPoints(clothoidData, showRadiusLines = false) {
+  drawMultiPointClothoidControlPoints(clothoidData, showRadiusLines = false, isLoopMode = false) {
     if (!clothoidData.segments) return
     
     const ctx = this.ctx
     
     // 新しい統一形式のセグメントデータかチェック
     if (clothoidData.segments.length > 0 && clothoidData.segments[0].segmentIndex !== undefined) {
+      // 制御点位置にラベルを表示するため、制御点座標をまず収集
+      const controlPointLabels = new Map()
+      
       // 新形式: セグメント情報に直接ラベル付きポイント情報がある
-      clothoidData.segments.forEach((segment, index) => {
-        if (!segment) return
-        
-        const points = [
-          { point: segment.TS, label: segment.TSLabel || `TS${index + 1}`, color: '#e53e3e' },
-          { point: segment.SC, label: segment.SCLabel || `SC${index + 1}`, color: '#f7931e' },
-          { point: segment.CS, label: segment.CSLabel || `CS${index + 1}`, color: '#f7931e' },
-          { point: segment.ST, label: segment.STLabel || `ST${index + 1}`, color: '#e53e3e' }
-        ]
-        
-        points.forEach(({ point, label, color }) => {
-          if (!point) return
+      // セグメントをsegmentIndex順にソートして正しい順序で処理
+      const sortedSegments = [...clothoidData.segments].sort((a, b) => {
+        const aIndex = a.segmentIndex !== undefined ? a.segmentIndex : 999
+        const bIndex = b.segmentIndex !== undefined ? b.segmentIndex : 999
+        return aIndex - bIndex
+      })
+      
+      // ループモードでも通常モード同様にセグメント座標にラベル表示
+      if (isLoopMode) {
+        // ループモード：通常モードと同じくセグメント座標にTS/ST/SC/CS点を表示
+        // ただし、インデックスはループモード仕様（0ベース）を使用
+        sortedSegments.forEach((segment, arrayIndex) => {
+          if (!segment) return
           
-          // 点を描画
-          ctx.fillStyle = color
-          ctx.beginPath()
-          ctx.arc(point.x, point.y, 4, 0, 2 * Math.PI)
-          ctx.fill()
+          // 接続セグメント（connection、loop-connection）はラベル描画をスキップ
+          if (segment.type === 'connection' || segment.type === 'loop-connection') {
+            logger.curve.debug(`canvasRenderer ループモード接続セグメントスキップ: type=${segment.type}, arrayIndex=${arrayIndex}`)
+            return
+          }
           
-          // 外枠を描画
-          ctx.strokeStyle = '#333'
-          ctx.lineWidth = 1
-          ctx.stroke()
+          // セグメントの実際のsegmentIndexを取得
+          const segmentIndex = segment.segmentIndex
+          if (segmentIndex === undefined) {
+            logger.curve.warn(`ループモードでセグメントのsegmentIndexが未定義: arrayIndex=${arrayIndex}`)
+            return
+          }
           
-          // ラベルを描画
-          ctx.fillStyle = COLORS.text
-          ctx.font = '12px Arial'
-          ctx.fillText(label, point.x + 6, point.y - 6)
+          // ループモード: 統一されたラベルインデックス計算
+          const totalPoints = this.points ? this.points.length : 3
+          const labelIndex = getUnifiedLabelIndex(segmentIndex, totalPoints, true)
+          
+          if (labelIndex === null) {
+            logger.curve.error(`ループモードラベル計算失敗: segmentIndex=${segmentIndex}, totalPoints=${totalPoints}`)
+            return
+          }
+          
+          // ラベルを生成（curveGenerator.jsで生成されたラベルを優先使用）
+          const tsLabel = segment.TSLabel || `TS${labelIndex}`
+          const scLabel = segment.SCLabel || `SC${labelIndex}`
+          const csLabel = segment.CSLabel || `CS${labelIndex}` 
+          const stLabel = segment.STLabel || `ST${labelIndex}`
+          const centerLabel = segment.SCLabel ? segment.SCLabel.replace('SC', 'C') : `C${labelIndex}`
+          
+          logger.curve.debug(`canvasRenderer ループモードセグメント${segmentIndex} (arrayIndex=${arrayIndex}): labelIndex=${labelIndex}, ラベル={TS:${tsLabel}, SC:${scLabel}, CS:${csLabel}, ST:${stLabel}}`)
+          
+          // 実際の座標位置にTS/SC/CS/ST点を表示
+          const points = [
+            { point: segment.TS, label: tsLabel, color: '#e53e3e' },
+            { point: segment.SC, label: scLabel, color: '#f7931e' },
+            { point: segment.CS, label: csLabel, color: '#f7931e' },
+            { point: segment.ST, label: stLabel, color: '#e53e3e' }
+          ]
+          
+          points.forEach(({ point, label, color }) => {
+            if (!point) return
+            
+            // 点を描画
+            ctx.fillStyle = color
+            ctx.beginPath()
+            ctx.arc(point.x, point.y, 4, 0, 2 * Math.PI)
+            ctx.fill()
+            
+            // 外枠を描画
+            ctx.strokeStyle = '#333'
+            ctx.lineWidth = 1
+            ctx.stroke()
+            
+            // ラベルを描画
+            ctx.fillStyle = COLORS.text
+            ctx.font = '12px Arial'
+            ctx.fillText(label, point.x + 6, point.y - 6)
+          })
         })
+      } else {
+        // 通常モード：従来通りセグメント座標にラベル表示
+        sortedSegments.forEach((segment, arrayIndex) => {
+          if (!segment) return
+          
+          // 接続セグメント（connection、loop-connection）はラベル描画をスキップ
+          if (segment.type === 'connection' || segment.type === 'loop-connection') {
+            logger.curve.debug(`canvasRenderer 接続セグメントスキップ: type=${segment.type}, arrayIndex=${arrayIndex}`)
+            return
+          }
+          
+          // セグメントの実際のsegmentIndexを取得（重要：arrayIndexではなくsegmentIndex）
+          const segmentIndex = segment.segmentIndex
+          if (segmentIndex === undefined) {
+            logger.curve.warn(`セグメントのsegmentIndexが未定義: arrayIndex=${arrayIndex}`)
+            return
+          }
+          
+          // 通常モード: 1から開始 (1, 2, 3...)
+          const labelIndex = segmentIndex + 1
+          
+          // ラベルを生成（curveGenerator.jsで生成されたラベルを優先使用）
+          const tsLabel = segment.TSLabel || `TS${labelIndex}`
+          const scLabel = segment.SCLabel || `SC${labelIndex}`
+          const csLabel = segment.CSLabel || `CS${labelIndex}` 
+          const stLabel = segment.STLabel || `ST${labelIndex}`
+          const centerLabel = segment.SCLabel ? segment.SCLabel.replace('SC', 'C') : `C${labelIndex}`
+          
+          logger.curve.debug(`canvasRenderer セグメント${segmentIndex} (arrayIndex=${arrayIndex}): isLoop=${isLoopMode}, labelIndex=${labelIndex}, ラベル={TS:${tsLabel}, SC:${scLabel}, CS:${csLabel}, ST:${stLabel}}`)
+          
+          // 実際の座標位置にTS/SC/CS/ST点を表示
+          const points = [
+            { point: segment.TS, label: tsLabel, color: '#e53e3e' },
+            { point: segment.SC, label: scLabel, color: '#f7931e' },
+            { point: segment.CS, label: csLabel, color: '#f7931e' },
+            { point: segment.ST, label: stLabel, color: '#e53e3e' }
+          ]
+          
+          points.forEach(({ point, label, color }) => {
+            if (!point) return
+            
+            // 点を描画
+            ctx.fillStyle = color
+            ctx.beginPath()
+            ctx.arc(point.x, point.y, 4, 0, 2 * Math.PI)
+            ctx.fill()
+            
+            // 外枠を描画
+            ctx.strokeStyle = '#333'
+            ctx.lineWidth = 1
+            ctx.stroke()
+            
+            // ラベルを描画
+            ctx.fillStyle = COLORS.text
+            ctx.font = '12px Arial'
+            ctx.fillText(label, point.x + 6, point.y - 6)
+          })
+        })
+      }
+      
+      // 円弧中心と半径線の描画（ループ・通常モード共通）
+      sortedSegments.forEach((segment, arrayIndex) => {
+        if (!segment || segment.type === 'connection' || segment.type === 'loop-connection') return
+        
+        const segmentIndex = segment.segmentIndex
+        if (segmentIndex === undefined) return
+        
+        const labelIndex = isLoopMode ? 
+          (this.points ? (segmentIndex + 1) % this.points.length : (segmentIndex + 1) % 3) : 
+          segmentIndex + 1
+        const centerLabel = segment.SCLabel ? segment.SCLabel.replace('SC', 'C') : `C${labelIndex}`
         
         // 円弧中心も表示
         if (segment.center || segment.actualCenter) {
@@ -605,6 +830,7 @@ export class CanvasRenderer {
             this.drawRadiusLines(center, segment.SC, segment.CS)
           }
           
+          // 実際の中心座標に表示
           ctx.fillStyle = COLORS.controlPointSelected
           ctx.beginPath()
           ctx.arc(center.x, center.y, 3, 0, 2 * Math.PI)
@@ -614,9 +840,10 @@ export class CanvasRenderer {
           ctx.lineWidth = 1
           ctx.stroke()
           
+          // 円弧中心のラベル
           ctx.fillStyle = COLORS.text
           ctx.font = '12px Arial'
-          ctx.fillText(`C${index + 1}`, center.x + 5, center.y - 5)
+          ctx.fillText(centerLabel, center.x + 5, center.y - 5)
           
           // 半径円を描画
           if (segment.radius) {
@@ -818,6 +1045,9 @@ export class CanvasRenderer {
     logger.curve.debug(`曲線内塗りつぶし完了 曲線点:${curve.length} ループ:${isLoopMode}`)
   }
 
+  /**
+   * メイン描画処理（統一化・簡素化）
+   */
   render(curve, options = {}) {
     const {
       showGrid = true,
@@ -835,7 +1065,7 @@ export class CanvasRenderer {
       imageSettings = null
     } = options
 
-    logger.curve.debug(`render() 呼び出し curve:${curve ? `${curve.length}点` : 'null'} clothoidData:${clothoidData ? '存在' : 'null'} segments:${clothoidData?.segments ? `${clothoidData.segments.length}個` : 'なし'} fillInside:${fillInsideMode} preview:${previewPoint ? '有' : '無'} backgroundImage:${backgroundImage ? '有' : '無'}`)
+    logger.curve.debug(`render() 呼び出し curve:${curve ? `${curve.length}点` : 'null'} clothoidData:${clothoidData ? '存在' : 'null'} segments:${clothoidData?.segments ? `${clothoidData.segments.length}個` : 'なし'} fillInside:${fillInsideMode} isLoop:${isLoopMode}`)
     
     this.clear()
     
@@ -853,46 +1083,23 @@ export class CanvasRenderer {
       this.fillInsideCurve(curve, isLoopMode)
     }
     
-    // 緩和曲線データがある場合は制御線を描画しない（実際の曲線で十分）
-    if (!lineOnlyMode && !clothoidData) {
-      this.drawControlLines()
-    }
+    // 曲線描画（統一化された処理）
+    this.renderCurveData(curve, clothoidData, { lineOnlyMode, isLoopMode })
     
-    // 緩和曲線の場合はセグメント別に描画
-    if (clothoidData && clothoidData.segments) {
-      logger.curve.debug(`セグメント描画を実行 ${clothoidData.segments.length}個`)
-      const segmentDrawResult = this.drawClothoidCurve(clothoidData.segments, { lineOnlyMode })
-      
-      // セグメント描画が失敗した場合（新しい構造）は通常の曲線描画にフォールバック
-      if (segmentDrawResult === false && curve && curve.length > 0) {
-        console.log('セグメント描画失敗 - 通常曲線描画にフォールバック')
-        this.drawCurve(curve)
-      }
-    } else if (curve && curve.length > 0) {
-      console.log('通常曲線描画を実行:', curve)
-      this.drawCurve(curve)
-    } else {
-      console.log('描画データなし - フォールバック処理')
-      // clothoidDataがあるが古い形式の場合、通常の曲線描画にフォールバック
-      if (clothoidData && curve && curve.length > 0) {
-        console.log('フォールバック: 通常曲線描画')
-        this.drawCurve(curve)
-      }
-    }
-    
+    // UI要素描画
     if (!lineOnlyMode) {
-      this.drawPoints(showConnectionLines && !lineOnlyMode, showAngles && !lineOnlyMode, isLoopMode)
+      this.drawPoints(showConnectionLines, showAngles, isLoopMode)
       
       // 緩和曲線の制御点を描画
       if (clothoidData) {
-        this.drawClothoidControlPoints(clothoidData, showRadiusLines && !lineOnlyMode)
+        this.drawClothoidControlPoints(clothoidData, showRadiusLines, isLoopMode)
         
         // 円を描画
         if (clothoidData.circles && clothoidData.circles.length > 0) {
           this.drawCircles(clothoidData.circles)
         }
         
-        // 🎯 SC=CS一致点を描画（特別な表示）
+        // SC=CS一致点を描画
         if (clothoidData.segments) {
           clothoidData.segments.forEach(segment => {
             if (segment.sccsConvergence) {
@@ -903,7 +1110,7 @@ export class CanvasRenderer {
       }
     }
     
-    // プレビュー点を描画（最後に描画して最前面に表示）
+    // プレビュー点を描画（最前面）
     if (previewPoint) {
       this.drawPreviewPoint(previewPoint)
     }
@@ -912,6 +1119,36 @@ export class CanvasRenderer {
     if (debugMode && overlapResults && overlapResults.hasOverlaps) {
       this.drawOverlapIcons(overlapResults, clothoidData)
     }
+  }
+
+  /**
+   * 曲線データの描画（統一処理）
+   */
+  renderCurveData(curve, clothoidData, options = {}) {
+    let renderSuccess = false
+    
+    // 1. セグメントデータがある場合は優先的に使用
+    if (clothoidData && clothoidData.segments && clothoidData.segments.length > 0) {
+      logger.curve.debug(`セグメント描画を実行 ${clothoidData.segments.length}個`)
+      renderSuccess = this.drawClothoidCurve(clothoidData.segments, options)
+    }
+    
+    // 2. セグメント描画が失敗またはデータがない場合は通常曲線描画
+    if (!renderSuccess && curve && curve.length > 0) {
+      logger.curve.debug(`通常曲線描画を実行: ${curve.length}点`)
+      this.drawCurve(curve)
+      renderSuccess = true
+    }
+    
+    // 3. どちらも失敗した場合の警告
+    if (!renderSuccess) {
+      logger.curve.warn('曲線描画データが不足しています', {
+        curve: curve ? curve.length : 'null',
+        segments: clothoidData?.segments ? clothoidData.segments.length : 'null'
+      })
+    }
+    
+    return renderSuccess
   }
 
   drawCircles(circles) {

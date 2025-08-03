@@ -266,6 +266,11 @@ import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { generateClothoidCurve } from './utils/curveGenerator.js'
 import { CanvasRenderer } from './utils/canvasRenderer.js'
 import { detectOverlaps, formatOverlapReport } from './utils/overlapDetector.js'
+import { 
+  getUnifiedTotalSegments, 
+  calculateCorrectSegmentIndex, 
+  getUnifiedLabelIndex 
+} from './utils/loopProtection.js'
 
 export default {
   name: 'App',
@@ -701,36 +706,25 @@ export default {
 
       // 2分探索で制御点間のセグメントを特定
       const totalPoints = curve.length
-      let pointsPerSegment, totalSegments
 
-      if (isLoopMode.value) {
-        // ループモード: 制御点数と同じ数のセグメント
-        totalSegments = points.value.length
-        pointsPerSegment = Math.floor(totalPoints / totalSegments)
-      } else {
-        // 非ループモード: 制御点数-1のセグメント
-        totalSegments = points.value.length - 1
-        pointsPerSegment = Math.floor(totalPoints / totalSegments)
-      }
+      // 【統一化】loopProtection.jsの統一関数を使用
+      const result = calculateCorrectSegmentIndex(
+        curveIndex, 
+        points.value.length, 
+        isLoopMode.value, 
+        totalPoints
+      )
 
-      if (pointsPerSegment <= 0) {
+      if (!result) {
         return null
       }
 
-      // どのセグメント（制御点間）にあるかを計算
-      let segmentIndex = Math.floor(closestIndex / pointsPerSegment)
-
-      // セグメントインデックスの範囲調整
-      if (isLoopMode.value) {
-        segmentIndex = segmentIndex % points.value.length
-      } else {
-        segmentIndex = Math.min(segmentIndex, points.value.length - 2)
-      }
+      const { segmentIndex, totalSegments, pointsPerSegment } = result
 
       console.log(`🎯 線上クリック検出:`, {
         セグメント: segmentIndex,
-        曲線インデックス: closestIndex.toFixed(2),
-        距離: closestDistance.toFixed(1) + 'px',
+        曲線インデックス: curveIndex.toFixed(2),
+        距離: distance.toFixed(1) + 'px',
         総セグメント数: totalSegments,
         セグメント毎点数: pointsPerSegment,
         ループモード: isLoopMode.value,
