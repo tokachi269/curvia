@@ -7,185 +7,271 @@
 
     <div class="container">
       <div class="sidebar">
-        <div class="panel">
-          <h3>表示オプション</h3>
-          <div class="settings">
-            <label class="checkbox-item">
-              <input type="checkbox" v-model="showGrid" @change="updateCanvas">
-              <span>グリッド表示</span>
-            </label>
-            <label class="checkbox-item">
-              <input type="checkbox" v-model="lineOnlyMode" @change="updateCanvas">
-              <span>線のみ表示</span>
-            </label>
-            <label class="checkbox-item">
-              <input type="checkbox" v-model="fillInsideMode" @change="updateCanvas">
-              <span>曲線内塗りつぶし</span>
-            </label>
-            <label class="checkbox-item">
-              <input type="checkbox" v-model="showConnectionLines" @change="updateCanvas" :disabled="lineOnlyMode">
-              <span>制御点間点線</span>
-            </label>
-            <label class="checkbox-item">
-              <input type="checkbox" v-model="debugMode" @change="updateCanvas">
-              <span>デバッグモード</span>
-            </label>
+        <!-- 表示オプション -->
+        <div class="blender-panel">
+          <div class="panel-header" @click="sidebarExpanded.display = !sidebarExpanded.display">
+            <div class="panel-icon">{{ sidebarExpanded.display ? '▼' : '▶' }}</div>
+            <div class="panel-title">表示オプション</div>
           </div>
-        </div>
-
-        <div class="panel">
-          <h3>背景画像</h3>
-          <div class="image-controls">
-            <div class="param-row-compact">
-              <input type="file" ref="imageInput" @change="handleImageLoad" accept="image/*" class="file-input">
-              <button v-if="backgroundImage" @click="clearImage" class="clear-btn">削除</button>
-            </div>
-            
-            <div v-if="backgroundImage" class="param-row-compact">
-              <label class="checkbox-item">
-                <input type="checkbox" v-model="showBackgroundImage" @change="updateCanvas">
-                <span>画像を表示</span>
-              </label>
-            </div>
-            
-            <div v-if="backgroundImage" class="image-settings">
-              <div class="param-row-compact">
-                <label>X座標</label>
-                <input type="number" v-model.number="imageSettings.x" @input="updateCanvas" class="param-input-compact" step="10">
-                <span>px</span>
-              </div>
-              
-              <div class="param-row-compact">
-                <label>Y座標</label>
-                <input type="number" v-model.number="imageSettings.y" @input="updateCanvas" class="param-input-compact" step="10">
-                <span>px</span>
-              </div>
-              
-              <div class="param-row-compact">
-                <label>スケール</label>
-                <input type="number" v-model.number="imageSettings.scale" @input="updateCanvas" class="param-input-compact" min="0.1" max="5" step="0.1">
-                <span>×</span>
-              </div>
-              
-              <div class="param-row-compact">
-                <label>透過度</label>
-                <input type="range" v-model.number="imageSettings.opacity" @input="updateCanvas" class="opacity-slider" min="0" max="1" step="0.1">
-                <span>{{ Math.round(imageSettings.opacity * 100) }}%</span>
-              </div>
-              
-              <div class="param-row-compact">
-                <label class="checkbox-item">
-                  <input type="checkbox" v-model="imageSettings.flipX" @change="updateCanvas">
-                  <span>水平反転</span>
+          <div v-show="sidebarExpanded.display" class="panel-content">
+            <div class="property-group">
+              <div class="property-row">
+                <label class="prop-label">
+                  <input type="checkbox" v-model="showGrid" @change="updateCanvas" class="prop-checkbox">
+                  <span class="prop-name">グリッド表示</span>
                 </label>
               </div>
-              
-              <div class="param-row-compact">
-                <label class="checkbox-item">
-                  <input type="checkbox" v-model="imageSettings.flipY" @change="updateCanvas">
-                  <span>垂直反転</span>
+              <div class="property-row">
+                <label class="prop-label">
+                  <input type="checkbox" v-model="lineOnlyMode" @change="updateCanvas" class="prop-checkbox">
+                  <span class="prop-name">線のみ表示</span>
+                </label>
+              </div>
+              <div class="property-row">
+                <label class="prop-label">
+                  <input type="checkbox" v-model="fillInsideMode" @change="updateCanvas" class="prop-checkbox">
+                  <span class="prop-name">曲線内塗りつぶし</span>
+                </label>
+              </div>
+              <div class="property-row">
+                <label class="prop-label">
+                  <input type="checkbox" v-model="showConnectionLines" @change="updateCanvas" :disabled="lineOnlyMode" class="prop-checkbox">
+                  <span class="prop-name">制御点間点線</span>
+                </label>
+              </div>
+              <div class="property-row">
+                <label class="prop-label">
+                  <input type="checkbox" v-model="debugMode" @change="updateCanvas" class="prop-checkbox">
+                  <span class="prop-name">デバッグモード</span>
                 </label>
               </div>
             </div>
           </div>
         </div>
 
-        <div class="panel">
-          <h3>制御点設定</h3>
-          <label class="checkbox-item">
-            <input type="checkbox" v-model="isLoopMode" @change="updateCurve">
-            <span>ループモード</span>
-          </label>
-          <!-- アクションボタンを制御点リストの上部に移動 -->
-          <div class="actions-horizontal">
-            <button @click="addPoint" class="add-btn">制御点追加</button>
-            <button @click="resetPoints" class="reset-btn">リセット</button>
+        <!-- 背景画像 -->
+        <div class="blender-panel">
+          <div class="panel-header" @click="sidebarExpanded.background = !sidebarExpanded.background">
+            <div class="panel-icon">{{ sidebarExpanded.background ? '▼' : '▶' }}</div>
+            <div class="panel-title">背景画像</div>
           </div>
-
-          <div class="actions-horizontal">
-            <button @click="applyDefaultToAllSimple" class="apply-btn">デフォルト適用</button>
-            <button @click="showDefaultSettings = !showDefaultSettings" class="btn btn-secondary">
-              {{ showDefaultSettings ? 'デフォルト設定▲' : 'デフォルト設定▼' }}
-            </button>
-          </div>
-          <!-- デフォルト設定を制御点設定内に統合 -->
-          <div v-if="showDefaultSettings" class="compact-controls">
-            <div class="param-row-compact">
-              <label>半径</label>
-              <input type="number" v-model.number="defaultRadius" min="10" max="500" step="5"
-                @input="applyDefaultRadius" class="param-input-compact">
-              <span>m</span>
-            </div>
-
-            <div class="param-row-compact">
-              <label>スパイラル係数</label>
-              <input type="number" v-model.number="defaultSpiralFactor" min="0.2" step="0.1"
-                @input="applyDefaultSpiralFactor" class="param-input-compact">
-              <span>×</span>
-            </div>
-          </div>
-          <div class="point-list">
-            <div v-for="(point, index) in points" :key="index" class="point-item"
-              :class="{ selected: selectedPoint === index }" @click="selectPoint(index)">
-              <div class="point-header">
-                <span class="point-name">P{{ index }}</span>
-                <div class="point-coords">
-                  <input type="text" v-model="point.x" @change="updateCurve" class="coord-input"
-                    :placeholder="`${Math.round(point.x)}`">
-                  <span>,</span>
-                  <input type="text" v-model="point.y" @change="updateCurve" class="coord-input"
-                    :placeholder="`${Math.round(point.y)}`">
+          <div v-show="sidebarExpanded.background" class="panel-content">
+            <div class="property-group">
+              <div class="property-row">
+                <input type="file" ref="imageInput" @change="handleImageLoad" accept="image/*" class="file-input">
+                <button v-if="backgroundImage" @click="clearImage" class="btn-small btn-danger">削除</button>
+              </div>
+              
+              <div v-if="backgroundImage" class="property-row">
+                <label class="prop-label">
+                  <input type="checkbox" v-model="showBackgroundImage" @change="updateCanvas" class="prop-checkbox">
+                  <span class="prop-name">画像を表示</span>
+                </label>
+              </div>
+              
+              <div v-if="backgroundImage" class="property-subgroup">
+                <div class="subgroup-title">位置・変形</div>
+                <div class="property-row">
+                  <label class="prop-name">X座標</label>
+                  <input type="number" v-model.number="imageSettings.x" @input="updateCanvas" class="prop-input" step="10">
+                  <span class="prop-unit">px</span>
+                </div>
+                
+                <div class="property-row">
+                  <label class="prop-name">Y座標</label>
+                  <input type="number" v-model.number="imageSettings.y" @input="updateCanvas" class="prop-input" step="10">
+                  <span class="prop-unit">px</span>
+                </div>
+                
+                <div class="property-row">
+                  <label class="prop-name">スケール</label>
+                  <input type="number" v-model.number="imageSettings.scale" @input="updateCanvas" class="prop-input" min="0.1" max="5" step="0.1">
+                  <span class="prop-unit">×</span>
+                </div>
+                
+                <div class="property-row">
+                  <label class="prop-name">透過度</label>
+                  <input type="range" v-model.number="imageSettings.opacity" @input="updateCanvas" class="prop-slider" min="0" max="1" step="0.1">
+                  <span class="prop-value">{{ Math.round(imageSettings.opacity * 100) }}%</span>
+                </div>
+                
+                <div class="property-row">
+                  <label class="prop-label">
+                    <input type="checkbox" v-model="imageSettings.flipX" @change="updateCanvas" class="prop-checkbox">
+                    <span class="prop-name">水平反転</span>
+                  </label>
+                </div>
+                
+                <div class="property-row">
+                  <label class="prop-label">
+                    <input type="checkbox" v-model="imageSettings.flipY" @change="updateCanvas" class="prop-checkbox">
+                    <span class="prop-name">垂直反転</span>
+                  </label>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
 
-              <!-- パラメータセクション -->
-              <div class="point-params"
-                :class="{ disabled: !((index > 0 && index < points.length - 1) || (isLoopMode && points.length > 2)) }">
-                <div class="param-row">
-                  <label>半径 (R)</label>
-                  <input type="number" v-model.number="point.radius" min="10" max="500" step="5" @input="updateCurve"
-                    class="param-input"
-                    :disabled="!((index > 0 && index < points.length - 1) || (isLoopMode && points.length > 2))">
-                  <span>m</span>
+        <!-- 制御点設定 -->
+        <div class="blender-panel">
+          <div class="panel-header" @click="sidebarExpanded.controls = !sidebarExpanded.controls">
+            <div class="panel-icon">{{ sidebarExpanded.controls ? '▼' : '▶' }}</div>
+            <div class="panel-title">制御点設定</div>
+          </div>
+          <div v-show="sidebarExpanded.controls" class="panel-content">
+            <div class="property-group">
+              <div class="property-row">
+                <label class="prop-label">
+                  <input type="checkbox" v-model="isLoopMode" @change="updateCurve" class="prop-checkbox">
+                  <span class="prop-name">ループモード</span>
+                </label>
+              </div>
+              
+              <!-- アクションボタン -->
+              <div class="property-subgroup">
+                <div class="subgroup-title">操作</div>
+                <div class="button-row">
+                  <button @click="addPoint" class="btn-small btn-primary">追加</button>
+                  <button @click="resetPoints" class="btn-small btn-secondary">リセット</button>
                 </div>
-
-                <div class="param-row">
-                  <label>スパイラル長制御</label>
-                  <select v-model="point.spiralMode" @change="updateCurve" class="param-select">
-                    <option value="auto">自動計算</option>
-                    <option value="manual">手動指定</option>
-                  </select>
-                </div>
-
-                <div class="param-row" v-if="point.spiralMode === 'manual'">
-                  <label>スパイラル長 (Ls)</label>
-                  <input type="number" v-model.number="point.spiralLength" min="1" :max="point.radius * 2" step="1"
-                    @input="updateCurve" class="param-input">
-                  <span>m</span>
-                </div>
-
-                <div class="param-row" :class="{ disabled: point.spiralMode !== 'auto' }">
-                  <label>スパイラル係数</label>
-                  <input type="number" v-model.number="point.spiralFactor" min="0.2" step="0.1"
-                    @input="updateCurve" class="param-input"
-                    :disabled="!((index > 0 && index < points.length - 1) || (isLoopMode && points.length > 2)) || point.spiralMode !== 'auto'">
-
-                  <span title="大きいほど長いスパイラル">×</span>
-                </div>
-
-                <div class="param-info" :class="{ disabled: !point.calculatedSpiral }">
-                  <small>
-                    計算値: Ls={{ point.calculatedSpiral?.length?.toFixed(1) || 0 }}m,
-                    θs={{ (point.calculatedSpiral?.angle * 180 / Math.PI)?.toFixed(1) || 0 }}°
-                  </small>
+                <div class="button-row">
+                  <button @click="applyDefaultToAllSimple" class="btn-small btn-success">デフォルト適用</button>
+                  <button @click="showDefaultSettings = !showDefaultSettings" class="btn-small btn-outline">
+                    {{ showDefaultSettings ? '設定▲' : '設定▼' }}
+                  </button>
                 </div>
               </div>
+              
+              <!-- デフォルト設定 -->
+              <div v-if="showDefaultSettings" class="property-subgroup">
+                <div class="subgroup-title">デフォルト値</div>
+                <div class="property-row">
+                  <label class="prop-name">半径</label>
+                  <input type="number" v-model.number="defaultRadius" min="10" max="500" step="5"
+                    @input="applyDefaultRadius" class="prop-input">
+                  <span class="prop-unit">m</span>
+                </div>
 
-              <button v-if="points.length > 3" @click="removePoint(index)" class="remove-btn"
-                :class="{ disabled: !((index > 0 && index < points.length - 1) || (isLoopMode && points.length > 2)) }"
-                :disabled="!((index > 0 && index < points.length - 1) || (isLoopMode && points.length > 2))">
-                削除
-              </button>
+                <div class="property-row">
+                  <label class="prop-name">スパイラル係数</label>
+                  <input type="number" v-model.number="defaultSpiralFactor" min="0.2" step="0.1"
+                    @input="applyDefaultSpiralFactor" class="prop-input">
+                  <span class="prop-unit">×</span>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 制御点リスト -->
+            <div class="property-subgroup">
+              <div class="subgroup-title">制御点 ({{ points.length }}個)</div>
+              <div class="point-list-blender">
+                <div v-for="(point, index) in points" :key="index" class="point-item-blender"
+                  :class="{ selected: selectedPoint === index, disabled: !((index > 0 && index < points.length - 1) || (isLoopMode && points.length > 2)) }" 
+                  @click="selectPoint(index)">
+                  
+                  <!-- 制御点ヘッダー -->
+                  <div class="point-header-blender">
+                    <div class="point-icon">●</div>
+                    <div class="point-name">P{{ index }}</div>
+                    <div class="point-coords-compact">
+                      <input type="text" v-model="point.x" @change="updateCurve" class="coord-input-mini"
+                        :placeholder="`${Math.round(point.x)}`">
+                      <span>,</span>
+                      <input type="text" v-model="point.y" @change="updateCurve" class="coord-input-mini"
+                        :placeholder="`${Math.round(point.y)}`">
+                    </div>
+                    <button v-if="points.length > 3 && ((index > 0 && index < points.length - 1) || (isLoopMode && points.length > 2))" 
+                      @click.stop="removePoint(index)" class="btn-tiny btn-danger">×</button>
+                  </div>
+
+                  <!-- 重要パラメータの常時表示 -->
+                  <div v-if="((index > 0 && index < points.length - 1) || (isLoopMode && points.length > 2))" 
+                    class="point-summary">
+                    <div class="summary-row">
+                      <span class="summary-label">R:</span>
+                      <input type="number" v-model.number="point.radius" @input="updateCurve" 
+                        class="summary-input" min="10" max="500" step="5">
+                      <span class="summary-unit">m</span>
+                    </div>
+                    <div class="summary-row" v-if="point.spiralMode === 'manual'">
+                      <span class="summary-label">Ls:</span>
+                      <input type="number" v-model.number="point.spiralLength" @input="updateCurve" 
+                        class="summary-input" min="1" :max="point.radius * 2" step="1">
+                      <span class="summary-unit">m</span>
+                    </div>
+                    <div class="summary-row" v-else>
+                      <span class="summary-label">×:</span>
+                      <input type="number" v-model.number="point.spiralFactor" @input="updateCurve" 
+                        class="summary-input" min="0.2" step="0.1">
+                    </div>
+                  </div>
+
+                  <!-- 展開可能なパラメータ -->
+                  <div v-if="selectedPoint === index && ((index > 0 && index < points.length - 1) || (isLoopMode && points.length > 2))" 
+                    class="point-details">
+                    
+                    <div class="property-subgroup">
+                      <div class="subgroup-title">座標</div>
+                      <div class="property-row">
+                        <label class="prop-name">X</label>
+                        <input type="number" v-model.number="point.x" @change="updateCurve" class="prop-input" step="1">
+                        <span class="prop-unit">px</span>
+                      </div>
+                      <div class="property-row">
+                        <label class="prop-name">Y</label>
+                        <input type="number" v-model.number="point.y" @change="updateCurve" class="prop-input" step="1">
+                        <span class="prop-unit">px</span>
+                      </div>
+                    </div>
+
+                    <div class="property-subgroup">
+                      <div class="subgroup-title">円弧パラメータ</div>
+                      <div class="property-row">
+                        <label class="prop-name">半径 (R)</label>
+                        <input type="number" v-model.number="point.radius" min="10" max="500" step="5" @input="updateCurve"
+                          class="prop-input">
+                        <span class="prop-unit">m</span>
+                      </div>
+                    </div>
+
+                    <div class="property-subgroup">
+                      <div class="subgroup-title">スパイラル設定</div>
+                      <div class="property-row">
+                        <label class="prop-name">制御</label>
+                        <select v-model="point.spiralMode" @change="updateCurve" class="prop-select">
+                          <option value="auto">自動計算</option>
+                          <option value="manual">手動指定</option>
+                        </select>
+                      </div>
+
+                      <div v-if="point.spiralMode === 'manual'" class="property-row">
+                        <label class="prop-name">スパイラル長 (Ls)</label>
+                        <input type="number" v-model.number="point.spiralLength" min="1" :max="point.radius * 2" step="1"
+                          @input="updateCurve" class="prop-input">
+                        <span class="prop-unit">m</span>
+                      </div>
+
+                      <div class="property-row" :class="{ disabled: point.spiralMode !== 'auto' }">
+                        <label class="prop-name">係数</label>
+                        <input type="number" v-model.number="point.spiralFactor" min="0.2" step="0.1"
+                          @input="updateCurve" class="prop-input"
+                          :disabled="point.spiralMode !== 'auto'">
+                        <span class="prop-unit" title="大きいほど長いスパイラル">×</span>
+                      </div>
+
+                      <div v-if="debugMode" class="property-row debug-info">
+                        <div class="debug-values">
+                          <small>
+                            計算値: Ls={{ point.calculatedSpiral?.length?.toFixed(1) || 0 }}m,
+                            θs={{ (point.calculatedSpiral?.angle * 180 / Math.PI)?.toFixed(1) || 0 }}°
+                          </small>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -216,7 +302,7 @@
                   <div>• マウスホイールでズーム</div>
                 </div>
               </div>
-              <div class="legend-section">
+              <div class="legend-section" v-if="!lineOnlyMode">
                 <div class="legend-title">線種</div>
                 <div class="legend-items">
                   <div class="legend-item">
@@ -233,7 +319,7 @@
                   </div>
                 </div>
               </div>
-              <div class="legend-section">
+              <div class="legend-section" v-if="!lineOnlyMode">
                 <div class="legend-title">制御点</div>
                 <div class="legend-items">
                   <div class="legend-item">
@@ -288,6 +374,13 @@ export default {
     const selectedPoint = ref(-1)
     const showDefaultSettings = ref(false) // デフォルト設定パネル表示フラグ
     const showLegend = ref(true) // 凡例表示フラグ
+    
+    // サイドバー展開状態管理
+    const sidebarExpanded = ref({
+      display: true,
+      background: true,
+      controls: true
+    })
 
     // 背景画像関連
     const backgroundImage = ref(null)
@@ -1179,6 +1272,7 @@ export default {
       debugMode, // デバッグモードを追加
       showDefaultSettings, // デフォルト設定パネル表示フラグを追加
       showLegend, // 凡例表示フラグを追加
+      sidebarExpanded, // サイドバー展開状態を追加
       backgroundImage, // 背景画像を追加
       imageSettings, // 画像設定を追加
       showBackgroundImage, // 背景画像表示切り替えを追加
@@ -1217,12 +1311,106 @@ export default {
 }
 </script>
 
+<style>
+/* デザインシステム - CSS変数定義（グローバル） */
+:root {
+  /* カラーパレット - ライトモード */
+  --color-bg-primary: #fafafa;
+  --color-bg-secondary: #ffffff;
+  --color-bg-tertiary: #f8f9fa;
+  --color-bg-quaternary: #f3f4f6;
+  --color-bg-accent: #f9fafb;
+  
+  --color-border-primary: #e5e7eb;
+  --color-border-secondary: #d1d5db;
+  --color-border-tertiary: #dee2e6;
+  
+  --color-text-primary: #333333;
+  --color-text-secondary: #374151;
+  --color-text-tertiary: #6b7280;
+  --color-text-quaternary: #495057;
+  --color-text-muted: #6c757d;
+  
+  --color-surface-hover: #e5e7eb;
+  --color-surface-active: #e9ecef;
+  
+  /* UI コンポーネント用カラー */
+  --color-primary: #3b82f6;
+  --color-primary-hover: #2563eb;
+  --color-secondary: #6b7280;
+  --color-secondary-hover: #4b5563;
+  --color-success: #10b981;
+  --color-success-hover: #059669;
+  --color-danger: #ef4444;
+  --color-danger-hover: #dc2626;
+  --color-focus: #3b82f6;
+  
+  /* スペーシング */
+  --spacing-xs: 2px;
+  --spacing-sm: 4px;
+  --spacing-md: 6px;
+  --spacing-lg: 8px;
+  --spacing-xl: 10px;
+  --spacing-2xl: 12px;
+  
+  /* ボーダー */
+  --border-radius-sm: 3px;
+  --border-radius-md: 4px;
+  --border-width: 1px;
+  
+  /* シャドウ */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.1);
+  
+  /* z-index */
+  --z-sticky-header: 100;
+  --z-panel-1: 103;
+  --z-panel-2: 102;
+  --z-panel-3: 101;
+  
+  /* フォント */
+  --font-size-xs: 10px;
+  --font-size-sm: 12px;
+  --font-size-md: 13px;
+  --font-weight-normal: 400;
+  --font-weight-semibold: 600;
+  
+  /* トランジション */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.2s ease;
+}
+
+/* 将来のダークモード用（現在は未使用）
+.dark {
+  --color-bg-primary: #1a1a1a;
+  --color-bg-secondary: #2a2a2a;
+  --color-bg-tertiary: #333333;
+  --color-bg-quaternary: #404040;
+  --color-bg-accent: #383838;
+  
+  --color-border-primary: #4a4a4a;
+  --color-border-secondary: #555555;
+  --color-border-tertiary: #606060;
+  
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #e5e7eb;
+  --color-text-tertiary: #9ca3af;
+  --color-text-quaternary: #d1d5db;
+  --color-text-muted: #6b7280;
+  
+  --color-surface-hover: #404040;
+  --color-surface-active: #4a4a4a;
+}
+*/
+</style>
+
 <style scoped>
+
 #app {
   font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic Medium", "Meiryo", "MS Gothic", sans-serif;
-  background-color: #fafafa;
+  background-color: var(--color-bg-primary);
   min-height: 100vh;
-  color: #333;
+  color: var(--color-text-primary);
   overflow: hidden;
   /* スクロールを無効化 */
 }
@@ -1249,25 +1437,30 @@ export default {
 
 .container {
   display: flex;
-  gap: 8px;
-  padding: 8px;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-lg);
   max-width: 1600px;
   margin: 0 auto;
-  height: calc(100vh - 50px);
+  height: calc(100vh - 60px); /* ヘッダー分を考慮した高さ */
   overflow: hidden;
 }
 
 .sidebar {
-  width: 260px;
+  width: 300px;
+  min-width: 200px;
+  max-width: 500px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  overflow-y: scroll; /* autoからscrollに変更 */
-  max-height: 100%;
-  scrollbar-gutter: stable; /* スクロールバー領域を常に確保 */
-  /* 内側にpadding-rightを追加してスクロールバー領域を確保 */
-  padding-right: 4px;
+  gap: var(--spacing-xs);
+  overflow-y: auto; /* サイドバー全体のスクロールを有効化 */
+  height: 100%; /* max-heightからheightに変更 */
+  scrollbar-gutter: stable;
+  padding: var(--spacing-sm);
   box-sizing: border-box;
+  background: var(--color-bg-tertiary);
+  border-right: var(--border-width) solid var(--color-border-tertiary);
+  resize: horizontal;
+  position: relative;
 }
 
 /* サイドバーのスクロールバーを常に表示 */
@@ -1311,6 +1504,443 @@ export default {
 
 .main-content {
   flex: 1;
+}
+
+/* 新しいサイドバーセクションスタイル */
+.sidebar-section {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.section-header {
+  background: #f8f9fa;
+  padding: 10px 12px;
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 1px solid #e9ecef;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  transition: background-color 0.2s ease;
+}
+
+.section-header:hover {
+  background: #e9ecef;
+}
+
+.section-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: #495057;
+}
+
+.section-toggle {
+  font-size: 12px;
+  color: #6c757d;
+  font-weight: bold;
+}
+
+.section-content {
+  padding: 12px;
+  background: #fff;
+}
+
+/* モダンなパネルスタイル（Blenderライクだがライトモード） */
+.blender-panel {
+  background: var(--color-bg-secondary);
+  border: var(--border-width) solid var(--color-border-secondary);
+  border-radius: var(--border-radius-md);
+  margin-bottom: var(--border-width);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  flex-shrink: 0; /* サイズを維持 */
+}
+
+/* 制御点設定パネルもflexサイズを固定 */
+.blender-panel:nth-child(3) {
+  flex-shrink: 0;
+}
+
+.blender-panel:nth-child(1) .panel-header {
+  z-index: var(--z-panel-1);
+}
+
+.blender-panel:nth-child(2) .panel-header {
+  z-index: var(--z-panel-2);
+}
+
+.blender-panel:nth-child(3) .panel-header {
+  z-index: var(--z-panel-3);
+}
+
+.panel-header {
+  background: var(--color-bg-quaternary);
+  padding: var(--spacing-lg) var(--spacing-xl);
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  border-bottom: var(--border-width) solid var(--color-border-primary);
+  position: -webkit-sticky;
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky-header);
+  transition: background-color var(--transition-fast);
+}
+
+.panel-header:hover {
+  background: var(--color-surface-hover);
+}
+
+.panel-icon {
+  font-size: var(--font-size-xs);
+  width: 12px;
+  color: var(--color-text-tertiary);
+  margin-right: var(--spacing-md);
+}
+
+.panel-title {
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.panel-content {
+  background: var(--color-bg-secondary);
+}
+
+.property-group {
+  padding: var(--spacing-lg);
+}
+
+.property-subgroup {
+  background: var(--color-bg-accent);
+  border: var(--border-width) solid var(--color-border-primary);
+  border-radius: var(--border-radius-sm);
+  margin: var(--spacing-md) 0;
+  padding: var(--spacing-md);
+}
+
+.subgroup-title {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: var(--spacing-md);
+  padding-bottom: var(--spacing-xs);
+  border-bottom: var(--border-width) solid var(--color-border-primary);
+}
+
+.property-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-sm);
+  min-height: 22px;
+}
+
+.prop-label {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  cursor: pointer;
+  flex: 1;
+}
+
+.prop-name {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  min-width: 60px;
+  flex-shrink: 0;
+}
+
+.prop-input {
+  background: var(--color-bg-secondary);
+  border: var(--border-width) solid var(--color-border-secondary);
+  border-radius: var(--border-radius-sm);
+  color: var(--color-text-secondary);
+  padding: 3px var(--spacing-md);
+  font-size: 11px;
+  width: 60px;
+  flex-shrink: 0;
+}
+
+.prop-input:focus {
+  outline: none;
+  border-color: var(--color-focus);
+  background: #fefefe;
+}
+
+.prop-select {
+  background: var(--color-bg-secondary);
+  border: var(--border-width) solid var(--color-border-secondary);
+  border-radius: var(--border-radius-sm);
+  color: var(--color-text-secondary);
+  padding: 3px var(--spacing-md);
+  font-size: 11px;
+  width: 100px;
+}
+
+.prop-checkbox {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--color-primary);
+}
+
+.prop-slider {
+  flex: 1;
+  height: 16px;
+  background: var(--color-bg-quaternary);
+  border-radius: var(--border-radius-sm);
+  accent-color: var(--color-primary);
+}
+
+.prop-unit {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  min-width: 20px;
+  text-align: right;
+}
+
+.prop-value {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  min-width: 30px;
+  text-align: right;
+}
+
+/* Blenderスタイルのボタン（ライトモード） */
+.btn-small {
+  padding: var(--spacing-sm) var(--spacing-lg);
+  font-size: var(--font-size-xs);
+  border: var(--border-width) solid var(--color-border-secondary);
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  margin: var(--border-width);
+}
+
+.btn-primary {
+  background: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary-hover);
+}
+
+.btn-primary:hover {
+  background: var(--color-primary-hover);
+}
+
+.btn-secondary {
+  background: var(--color-secondary);
+  color: white;
+  border-color: var(--color-secondary-hover);
+}
+
+.btn-secondary:hover {
+  background: var(--color-secondary-hover);
+}
+
+.btn-success {
+  background: var(--color-success);
+  color: white;
+  border-color: var(--color-success-hover);
+}
+
+.btn-success:hover {
+  background: var(--color-success-hover);
+}
+
+.btn-danger {
+  background: var(--color-danger);
+  color: white;
+  border-color: var(--color-danger-hover);
+}
+
+.btn-danger:hover {
+  background: var(--color-danger-hover);
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--color-text-secondary);
+  border: var(--border-width) solid var(--color-border-secondary);
+}
+
+.btn-outline:hover {
+  background: var(--color-bg-quaternary);
+}
+
+.btn-tiny {
+  padding: var(--spacing-xs) var(--spacing-md);
+  font-size: 9px;
+  min-width: 20px;
+}
+
+.button-row {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
+}
+
+/* 制御点リストBlenderスタイル（ライトモード） */
+.point-list-blender {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 3px;
+  /* max-height制限を削除してサイドバー全体でスクロール */
+}
+
+.point-item-blender {
+  background: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.point-item-blender:hover {
+  background: #f3f4f6;
+}
+
+.point-item-blender.selected {
+  background: #3b82f6;
+  color: white;
+}
+
+.point-item-blender.disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.point-header-blender {
+  display: flex;
+  align-items: center;
+  padding: 6px 8px;
+  gap: 6px;
+}
+
+.point-summary {
+  padding: 4px 8px;
+  background: #f3f4f6;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.summary-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.summary-label {
+  font-size: 10px;
+  color: #6b7280;
+  font-weight: 600;
+  min-width: 16px;
+}
+
+.summary-input {
+  width: 45px;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 2px;
+  color: #374151;
+  padding: 2px 4px;
+  font-size: 10px;
+}
+
+.summary-unit {
+  font-size: 9px;
+  color: #6b7280;
+}
+
+.point-icon {
+  font-size: 8px;
+  color: #3b82f6;
+  width: 10px;
+}
+
+.point-name {
+  font-weight: 600;
+  font-size: 11px;
+  min-width: 20px;
+}
+
+.point-coords-compact {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+}
+
+.coord-input-mini {
+  width: 40px;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 2px;
+  color: #374151;
+  padding: 2px 4px;
+  font-size: 9px;
+}
+
+.point-details {
+  padding: 8px;
+  background: #f9fafb;
+  border-top: 1px solid #e5e7eb;
+}
+
+.debug-info {
+  background: #f3f4f6;
+  border-radius: 2px;
+  padding: 4px;
+}
+
+.debug-values {
+  font-family: 'Courier New', monospace;
+  color: #6b7280;
+}
+
+/* 無効化スタイル */
+.property-row.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* ファイル入力のスタイル（ライトモード） */
+.file-input {
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 2px;
+  color: #374151;
+  padding: 4px 6px;
+  font-size: 10px;
+  cursor: pointer;
+  flex: 1;
+}
+
+.file-input::-webkit-file-upload-button {
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 2px;
+  color: #374151;
+  padding: 2px 6px;
+  font-size: 9px;
+  cursor: pointer;
+  margin-right: 6px;
+}
+
+.file-input::-webkit-file-upload-button:hover {
+  background: #e5e7eb;
 }
 
 .panel {

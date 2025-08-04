@@ -507,7 +507,7 @@ export class CanvasRenderer {
     
     ctx.strokeStyle = COLORS.radiusLine
     ctx.lineWidth = 1
-    ctx.setLineDash([3, 3]) // 点線
+    ctx.setLineDash([5, 5]) // 点線（制御点間と同じパターン）
     
     // SC-C線
     ctx.beginPath()
