@@ -1,8 +1,8 @@
 <template>
   <div id="app">
     <div class="header">
-      <h1>道路線形設計ツール</h1>
-      <p>制御点をドラッグして道路の形状を調整できます</p>
+      <h1>線形設計ツール</h1>
+      <p>制御点をドラッグして線の形状を調整できます</p>
     </div>
 
     <div class="container">
@@ -202,7 +202,7 @@
           <!-- 凡例をキャンバス右上に配置（折りたたみ可能） -->
           <div class="legend-overlay" v-if="!lineOnlyMode">
             <div class="legend-header" @click="showLegend = !showLegend">
-              <span class="legend-title-main">凡例</span>
+              <span class="legend-title-main">操作ガイド</span>
               <span class="legend-toggle">{{ showLegend ? '▲' : '▼' }}</span>
             </div>
             <div v-if="showLegend" class="legend-content">
@@ -404,14 +404,7 @@ export default {
 
     // 曲線を再計算・再描画
     const updateCurve = () => {
-      console.group('🔄 曲線更新処理開始')
-      console.log('📊 制御点数:', points.value.length)
-      console.log('📍 制御点座標:', points.value.map(p => `(${p.x.toFixed(1)}, ${p.y.toFixed(1)})`))
-      console.log('🔄 ループモード:', isLoopMode.value)
-
       if (!renderer) {
-        console.warn('⚠️ レンダラーが初期化されていません')
-        console.groupEnd()
         return
       }
 
@@ -421,11 +414,9 @@ export default {
       let result
       // 統一版の緩和曲線生成関数を使用
       if (points.value.length >= 3) {
-        console.log('✅ 統一緩和曲線生成を実行')
         const speed = 60 // デフォルト速度
         result = generateClothoidCurve(points.value, speed, isLoopMode.value, defaultSpiralFactor.value)
       } else {
-        console.log('⚠️ 点数不足 - 直線処理')
         result = {
           data: {
             curve: points.value,
@@ -436,9 +427,6 @@ export default {
       }
 
       if (result.error) {
-        console.error('❌ 曲線生成エラー:', result.error)
-        console.groupEnd()
-
         // エラーがあっても基本描画は行う
         renderer.render([], {
           showGrid: showGrid.value,
@@ -478,21 +466,12 @@ export default {
       // オーバーラップ検出を実行
       if (debugMode.value && curveData.clothoidData) {
         overlapResults = detectOverlaps(curveData, points.value)
-        console.log('🔍 オーバーラップ検出結果:', overlapResults)
         if (overlapResults.hasOverlaps) {
           console.warn('⚠️ オーバーラップ検出:', formatOverlapReport(overlapResults))
         }
       } else {
         overlapResults = null
       }
-
-      console.log('✅ 曲線生成成功:', {
-        点数: curveData.curve?.length || 0,
-        セグメント数: curveData.clothoidData?.totalSegments || 0,
-        計算時間: curveData.clothoidData?.calculationTime ? `${curveData.clothoidData.calculationTime.toFixed(2)}ms` : '不明',
-        オーバーラップ: overlapResults?.hasOverlaps ? `${overlapResults.overlaps.length}件` : 'なし'
-      })
-      console.groupEnd()
 
       // 曲線を描画
       const clothoidData = curveData.clothoidData || null
@@ -545,10 +524,8 @@ export default {
 
     // デフォルトスパイラル係数を適用
     const applyDefaultSpiralFactor = () => {
-      console.log('🔧 デフォルトスパイラル係数適用:', defaultSpiralFactor.value)
       points.value.forEach((point, index) => {
         if (point.spiralFactor !== undefined) {
-          console.log(`  P${index}: ${point.spiralFactor} -> ${defaultSpiralFactor.value}`)
           point.spiralFactor = defaultSpiralFactor.value
         }
       })
@@ -577,7 +554,6 @@ export default {
           selectedPoint.value = Math.max(-1, selectedPoint.value - 1)
         }
 
-        console.log(`🗑️ 制御点P${index}を削除, 新しい選択: P${selectedPoint.value}`)
         updateCurve()
       }
     }
@@ -651,12 +627,73 @@ export default {
     }
 
     // 線上の点を検索し、どの制御点間にあるかを2分探索で判定
+    /**
+     * 指定位置が既存の制御点に近すぎるかチェック
+     * @param {number} x - X座標
+     * @param {number} y - Y座標
+     * @param {number} threshold - 距離の閾値（デフォルト: 30ピクセル）
+     * @returns {boolean} 近すぎる場合はtrue
+     */
+    const isTooCloseToExistingPoints = (x, y, threshold = 30) => {
+      return points.value.some(point => {
+        const distance = Math.sqrt((x - point.x) ** 2 + (y - point.y) ** 2)
+        return distance < threshold
+      })
+    }
+
+    /**
+     * セグメントから統一的な点列を生成
+     * 描画されている実際の線と一致する点列を作成
+     */
+    const generateUnifiedCurvePoints = (curveData) => {
+      if (!curveData.segments || curveData.segments.length === 0) {
+        return curveData.curve || []
+      }
+      
+      const unifiedPoints = []
+      
+      for (const segment of curveData.segments) {
+        let segmentPoints = null
+        
+        // セグメントから点列を抽出（canvasRenderer.jsのextractRenderPointsと同じロジック）
+        if (segment.curve && segment.curve.length > 0) {
+          segmentPoints = segment.curve
+        } else if (segment.drawingSegments && segment.drawingSegments.length > 0) {
+          // drawingSegmentsを連結
+          segmentPoints = []
+          for (const drawSeg of segment.drawingSegments) {
+            if (drawSeg.points && drawSeg.points.length > 0) {
+              // 最初のセグメント以外は重複する最初の点をスキップ
+              const startIndex = segmentPoints.length > 0 ? 1 : 0
+              segmentPoints.push(...drawSeg.points.slice(startIndex))
+            }
+          }
+        } else if (segment.points && segment.points.length > 0) {
+          segmentPoints = segment.points
+        }
+        
+        if (segmentPoints && segmentPoints.length > 0) {
+          // 最初のセグメント以外は重複する最初の点をスキップ
+          const startIndex = unifiedPoints.length > 0 ? 1 : 0
+          unifiedPoints.push(...segmentPoints.slice(startIndex))
+        }
+      }
+      
+      return unifiedPoints
+    }
+
     const findSegmentOnCurve = (mouseX, mouseY, tolerance = 8) => {
-      if (!currentCurveData || !currentCurveData.curve) {
+      if (!currentCurveData) {
         return null
       }
 
-      const curve = currentCurveData.curve
+      // 統一的な点列を生成（描画と一致）
+      const curve = generateUnifiedCurvePoints(currentCurveData)
+      
+      if (!curve || curve.length < 2) {
+        return null
+      }
+
       let closestDistance = Infinity
       let closestSegment = null
       let closestPoint = null
@@ -666,6 +703,11 @@ export default {
       for (let i = 0; i < curve.length - 1; i++) {
         const p1 = curve[i]
         const p2 = curve[i + 1]
+
+        if (!p1 || !p2 || typeof p1.x !== 'number' || typeof p1.y !== 'number' || 
+            typeof p2.x !== 'number' || typeof p2.y !== 'number') {
+          continue
+        }
 
         // 線分p1-p2上の最も近い点を求める
         const dx = p2.x - p1.x
@@ -709,7 +751,7 @@ export default {
 
       // 【統一化】loopProtection.jsの統一関数を使用
       const result = calculateCorrectSegmentIndex(
-        curveIndex, 
+        closestIndex, 
         points.value.length, 
         isLoopMode.value, 
         totalPoints
@@ -721,16 +763,6 @@ export default {
 
       const { segmentIndex, totalSegments, pointsPerSegment } = result
 
-      console.log(`🎯 線上クリック検出:`, {
-        セグメント: segmentIndex,
-        曲線インデックス: curveIndex.toFixed(2),
-        距離: distance.toFixed(1) + 'px',
-        総セグメント数: totalSegments,
-        セグメント毎点数: pointsPerSegment,
-        ループモード: isLoopMode.value,
-        補間点: `(${closestPoint.x.toFixed(1)}, ${closestPoint.y.toFixed(1)})`
-      })
-
       return {
         segmentIndex: segmentIndex,
         curveIndex: closestIndex,
@@ -741,19 +773,26 @@ export default {
 
     // 制御点間に新しい制御点を挿入
     const insertPointAtSegment = (segmentIndex, mouseX, mouseY) => {
-      console.log(`➕ セグメント${segmentIndex}に新しい制御点を挿入: (${mouseX.toFixed(1)}, ${mouseY.toFixed(1)})`)
-
       let insertIndex
       if (isLoopMode.value) {
-        // ループモードでは、セグメントの後に挿入
-        // ただし、最後のセグメント（PnからP0）の場合は最後に挿入
-        if (segmentIndex === points.value.length - 1) {
-          insertIndex = points.value.length // 最後に追加
+        // ループモードでは、セグメントインデックスに基づいて適切な位置を計算
+        // セグメント0 = P0→P1→P2の角P1処理 → P0-P1間の直線部分ならP1前に挿入
+        // セグメント1 = P1→P2→P3の角P2処理 → P1-P2間の直線部分ならP2前に挿入
+        
+        // 曲線上の位置から適切な挿入位置を判定
+        if (segmentIndex === 0) {
+          // セグメント0: P0-P1間の直線部分またはP1の角部分
+          insertIndex = 1 // P1の前に挿入
         } else {
-          insertIndex = segmentIndex + 1
+          // その他のセグメント: セグメントの中心点の後に挿入
+          insertIndex = (segmentIndex + 2) % points.value.length
+          if (insertIndex === 0) {
+            insertIndex = points.value.length // 最後に追加
+          }
         }
       } else {
-        // 非ループモードでは単純にセグメントの後に挿入
+        // 非ループモードでは、セグメントの中心点の後に挿入
+        // セグメント0: P0→P1→P2の角P1を処理 → P1の後に挿入
         insertIndex = segmentIndex + 1
       }
 
@@ -771,7 +810,6 @@ export default {
       points.value.splice(insertIndex, 0, newPoint)
       selectedPoint.value = insertIndex
 
-      console.log(`✅ 制御点P${insertIndex}を追加完了 (ループモード: ${isLoopMode.value})`)
       updateCurve()
     }
 
@@ -905,14 +943,19 @@ export default {
           }
         } else {
           // 線上かどうかをチェックしてプレビュー点を設定
-          const segmentInfo = findSegmentOnCurve(coords.x, coords.y, 15) // 感度を上げる
+          const segmentInfo = findSegmentOnCurve(coords.x, coords.y, 20)
           if (segmentInfo) {
-            canvas.value.style.cursor = 'copy'
-            // プレビュー点を線上の実際の点に設定（スナップ）
-            previewPoint.value = {
-              x: segmentInfo.point.x,  // マウス位置ではなく曲線上の実際の点
-              y: segmentInfo.point.y,  // マウス位置ではなく曲線上の実際の点
-              segmentIndex: segmentInfo.segmentIndex
+            // 既存の制御点に近すぎる場合はプレビューを表示しない
+            if (isTooCloseToExistingPoints(segmentInfo.point.x, segmentInfo.point.y, 30)) {
+              previewPoint.value = null
+            } else {
+              canvas.value.style.cursor = 'copy'
+              // プレビュー点を線上の実際の点に設定（スナップ）
+              previewPoint.value = {
+                x: segmentInfo.point.x,  // マウス位置ではなく曲線上の実際の点
+                y: segmentInfo.point.y,  // マウス位置ではなく曲線上の実際の点
+                segmentIndex: segmentInfo.segmentIndex
+              }
             }
             // プレビュー点を表示するために再描画
             nextTick(() => {
@@ -1008,31 +1051,36 @@ export default {
       if (pointIndex === -1) {
         // プレビュー点がある場合はそれを使用
         if (previewPoint.value) {
-          console.log(`🎯 プレビュー点からダブルクリック検出: セグメント${previewPoint.value.segmentIndex}`)
-          insertPointAtSegment(previewPoint.value.segmentIndex, previewPoint.value.x, previewPoint.value.y)
+          // 既存の制御点に近すぎる場合は挿入を阻止
+          if (!isTooCloseToExistingPoints(previewPoint.value.x, previewPoint.value.y, 30)) {
+            insertPointAtSegment(previewPoint.value.segmentIndex, previewPoint.value.x, previewPoint.value.y)
+          }
           previewPoint.value = null // 挿入後にプレビュー点をクリア
         } else {
           // プレビュー点がない場合は線上検索を実行
           const segmentInfo = findSegmentOnCurve(coords.x, coords.y, 12)
 
           if (segmentInfo && segmentInfo.segmentIndex >= 0) {
-            // 線上の場合：制御点間に新しい制御点を挿入（線上の実際の点を使用）
-            console.log(`🎯 線上ダブルクリック検出: セグメント${segmentInfo.segmentIndex}`)
-            insertPointAtSegment(segmentInfo.segmentIndex, segmentInfo.point.x, segmentInfo.point.y)
-          } else {
-            // 空いている場所の場合：最後に新しい制御点を追加
-            console.log('📍 空いている場所にダブルクリック - 最後に追加')
-            const newPoint = {
-              x: coords.x,
-              y: coords.y,
-              radius: defaultRadius.value,
-              spiralMode: 'auto',
-              spiralLength: 50,  // デフォルト50m
-              spiralFactor: defaultSpiralFactor.value,
-              calculatedSpiral: null
+            // 既存の制御点に近すぎる場合は挿入を阻止
+            if (!isTooCloseToExistingPoints(segmentInfo.point.x, segmentInfo.point.y, 30)) {
+              // 線上の場合：制御点間に新しい制御点を挿入（線上の実際の点を使用）
+              insertPointAtSegment(segmentInfo.segmentIndex, segmentInfo.point.x, segmentInfo.point.y)
             }
-            points.value.push(newPoint)
-            updateCurve()
+          } else {
+            // 空いている場所の場合：既存の制御点に近すぎなければ最後に新しい制御点を追加
+            if (!isTooCloseToExistingPoints(coords.x, coords.y, 30)) {
+              const newPoint = {
+                x: coords.x,
+                y: coords.y,
+                radius: defaultRadius.value,
+                spiralMode: 'auto',
+                spiralLength: 50,  // デフォルト50m
+                spiralFactor: defaultSpiralFactor.value,
+                calculatedSpiral: null
+              }
+              points.value.push(newPoint)
+              updateCurve()
+            }
           }
         }
       }
@@ -1045,19 +1093,15 @@ export default {
         if (index > 0 && index < points.value.length - 1) {
           if (!point.spiralMode) {
             point.spiralMode = 'auto'
-            console.log(`P${index} spiralMode初期化: auto`)
           }
           if (point.spiralFactor === undefined) {
             point.spiralFactor = defaultSpiralFactor.value
-            console.log(`P${index} spiralFactor初期化: ${defaultSpiralFactor.value}`)
           }
           if (point.radius === undefined) {
             point.radius = defaultRadius.value
-            console.log(`P${index} radius初期化: ${defaultRadius.value}`)
           }
           if (point.spiralLength === undefined) {
             point.spiralLength = 50  // デフォルト50m
-            console.log(`P${index} spiralLength初期化: ${point.spiralLength}`)
           }
         }
       })
@@ -1214,7 +1258,7 @@ export default {
 }
 
 .sidebar {
-  width: 240px;
+  width: 260px;
   display: flex;
   flex-direction: column;
   gap: 6px;

@@ -109,13 +109,28 @@ export function calculateSingleClothoid(points, radius, spiralLength = null, def
       }, debugInfo)
     }
     
-    // §9.2 スパイラル長の自動設定
+    // 180度近い角度の場合も直線として処理
+    if (absDef > Math.PI * 0.95) {  // 171度以上（180度に近い）を直線とみなす
+      logger.curve.info('直線として処理（角度が180度に近い）')
+      debugInfo += '直線として処理（角度が180度に近すぎます）\n'
+      return createSuccess({
+        isLine: true,
+        curve: [P0, P1, P2]
+      }, debugInfo)
+    }
+    
+    // §9.2 スパイラル長の自動設定（角度依存）
     if (spiralLength === null) {
       // デフォルトスパイラル係数または制御点の設定を使用
       const spiralFactor = P1.spiralFactor || defaultSpiralFactor
-      // デフォルト50mの基準値を使用
-      spiralLength = 50 * spiralFactor
-      debugInfo += `自動スパイラル長計算: 基準50m × 係数${spiralFactor} = ${spiralLength.toFixed(2)}m\n`
+      
+      // 角度依存のスパイラル長計算
+      // 2ラジアン（≈115）で50m になるように調整
+      // 基準係数 = 50 / 2 ≈ 25.0
+      const baseCoefficient = 25.0
+      spiralLength = baseCoefficient * absDef * spiralFactor
+      
+      debugInfo += `自動スパイラル長計算（角度依存）: ${baseCoefficient} × ${(absDef * 180 / Math.PI).toFixed(1)}° × ${spiralFactor} = ${spiralLength.toFixed(2)}m\n`
     }
     
     // §9.3 スパイラル角

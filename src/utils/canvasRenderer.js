@@ -51,7 +51,7 @@ const COLORS = {
   
   // 補助線（目立たない）
   auxiliaryLine: '#a0aec0', // 点線（薄いグレー）
-  radiusLine: '#cbd5e0',    // 半径線（更に薄いグレー）
+  radiusLine: '#a0aec0',    // 半径線（制御点間の点線と同じ色）
   angleMark: '#9ca3af',     // 角度表示（薄いグレー）
   
   // ホバー・プレビュー
@@ -492,6 +492,16 @@ export class CanvasRenderer {
   }
 
   // 半径線描画メソッド
+  /**
+   * 角度の差を正しく計算（-π〜πの範囲で正規化）
+   */
+  normalizeAngleDifference(angle1, angle2) {
+    let diff = angle2 - angle1
+    while (diff > Math.PI) diff -= 2 * Math.PI
+    while (diff < -Math.PI) diff += 2 * Math.PI
+    return diff
+  }
+
   drawRadiusLines(center, SC, CS) {
     const ctx = this.ctx
     
@@ -511,9 +521,12 @@ export class CanvasRenderer {
     ctx.lineTo(CS.x, CS.y)
     ctx.stroke()
     
-    // 円弧の中点への線
-    const midAngle = Math.atan2(SC.y - center.y, SC.x - center.x) + 
-                    (Math.atan2(CS.y - center.y, CS.x - center.x) - Math.atan2(SC.y - center.y, SC.x - center.x)) / 2
+    // 円弧の中点への線（角度の正規化を使用）
+    const startAngle = Math.atan2(SC.y - center.y, SC.x - center.x)
+    const endAngle = Math.atan2(CS.y - center.y, CS.x - center.x)
+    const angleDiff = this.normalizeAngleDifference(startAngle, endAngle)
+    const midAngle = startAngle + angleDiff / 2
+    
     const radius = Math.sqrt((SC.x - center.x) ** 2 + (SC.y - center.y) ** 2)
     const midX = center.x + radius * Math.cos(midAngle)
     const midY = center.y + radius * Math.sin(midAngle)

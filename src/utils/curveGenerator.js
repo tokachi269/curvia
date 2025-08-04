@@ -142,6 +142,43 @@ function processAllSegments(points, isLoop, defaultSpiralFactor, debugInfo) {
     
     // セグメント情報を追加
     if (segmentInfo) {
+      // 最初のセグメントの場合、P0→TS1の初期接続線を処理（非ループモードのみ）
+      if (i === 0 && !isLoop) {
+        const startPoint = points[0] // P0
+        const firstTS = segmentInfo.TS // TS1
+        const initialConnectionDistance = Math.hypot(firstTS.x - startPoint.x, firstTS.y - startPoint.y)
+        
+        logger.curve.debug(`P0-TS1初期接続チェック: 距離:${initialConnectionDistance.toFixed(3)}m`)
+        
+        if (initialConnectionDistance > 0.1) {
+          const initialConnectionPoints = generateConnectionPoints(startPoint, firstTS, initialConnectionDistance)
+          
+          const initialConnectionSegment = {
+            segmentIndex: 'P0-TS1',
+            type: 'connection',
+            isLine: true,
+            curve: initialConnectionPoints,
+            points: initialConnectionPoints,
+            drawingSegments: [{ 
+              type: 'straight', 
+              points: initialConnectionPoints 
+            }],
+            startPoint: startPoint,
+            endPoint: firstTS,
+            renderSettings: {
+              color: 'connection',
+              lineWidth: 3,
+              visible: true
+            }
+          }
+          
+          segments.push(initialConnectionSegment)
+          // 初期接続線の点をallCurvePointsの先頭に追加（重複除去）
+          allCurvePoints.unshift(...initialConnectionPoints.slice(0, -1))
+          logger.curve.info(`P0-TS1初期接続線追加: ${initialConnectionDistance.toFixed(3)}m, ${initialConnectionPoints.length}点`)
+        }
+      }
+      
       segments.push(segmentInfo)
       
       // セグメント間接続線を処理
