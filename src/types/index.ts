@@ -4,6 +4,8 @@ export interface ControlPoint {
   y: number
   radius: number
   spiralFactor: number
+  spiralMode?: 'auto' | 'manual'
+  spiralLength?: number
 }
 
 // キャンバス変換の型定義

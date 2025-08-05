@@ -58,25 +58,25 @@ defineEmits<{
 /* サイズバリエーション */
 .btn-small {
   padding: var(--spacing-sm) var(--spacing-lg);
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-sm);
   min-height: 28px;
 }
 
 .btn-medium {
   padding: var(--spacing-md) var(--spacing-xl);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-md);
   min-height: 32px;
 }
 
 .btn-large {
   padding: var(--spacing-lg) var(--spacing-2xl);
-  font-size: var(--font-size-md);
+  font-size: var(--font-size-lg);
   min-height: 36px;
 }
 
 /* カラーバリエーション */
 .btn-default {
-  background: var(--color-bg-secondary);
+  background: var(--color-bg-primary);        /* ボタンはプライマリ */
   color: var(--color-text-secondary);
   border-color: var(--color-border-secondary);
 }

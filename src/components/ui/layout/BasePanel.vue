@@ -1,5 +1,5 @@
 <template>
-  <div class="blender-panel">
+  <div class="panel">
     <div 
       class="panel-header" 
       @click="toggleExpanded"
@@ -39,8 +39,8 @@ const toggleExpanded = () => {
 </script>
 
 <style scoped>
-.blender-panel {
-  background: var(--color-bg-secondary);
+.panel {
+  background: var(--color-bg-primary);         /* パネルはプライマリ（白） */
   border: var(--border-width) solid var(--color-border-secondary);
   border-radius: var(--border-radius-md);
   margin-bottom: var(--border-width);
@@ -50,7 +50,7 @@ const toggleExpanded = () => {
 }
 
 .panel-header {
-  background: var(--color-bg-quaternary);
+  background: var(--color-bg-primary);        /* ヘッダーも白背景 */
   padding: var(--spacing-lg) var(--spacing-xl);
   cursor: pointer;
   user-select: none;
@@ -81,7 +81,7 @@ const toggleExpanded = () => {
 }
 
 .panel-content {
-  background: var(--color-bg-secondary);
+  background: var(--color-bg-tertiary);
 }
 
 .property-group {

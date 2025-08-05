@@ -91,15 +91,15 @@ defineExpose({
   box-shadow: 0 4px 12px var(--shadow-md);
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-lg) var(--spacing-xl);
   max-width: 400px;
   cursor: pointer;
   user-select: none;
 }
 
 .error-icon {
-  font-size: 20px;
+  font-size: var(--font-size-lg);
   flex-shrink: 0;
 }
 
@@ -126,7 +126,7 @@ defineExpose({
   background: none;
   border: none;
   color: var(--text-secondary);
-  font-size: 18px;
+  font-size: var(--font-size-lg);
   cursor: pointer;
   padding: 0;
   width: 20px;

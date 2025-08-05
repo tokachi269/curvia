@@ -27,7 +27,24 @@
 ```
 src/
 ├── App.vue                  # メインアプリケーション（UI・イベント処理）
-├── main.js                  # エントリーポイント
+├── main.ts                  # エントリーポイント
+├── components/              # Vue.js コンポーネント
+│   ├── ui/                 # 純粋UIコンポーネント
+│   │   ├── base/          # 基本UI（ボタン、入力等）
+│   │   ├── layout/        # レイアウト構造
+│   │   ├── property/      # プロパティ設定
+│   │   └── display/       # 表示・装飾
+│   ├── domain/            # ビジネスロジック特化
+│   │   ├── curve/         # 曲線関連
+│   │   └── point/         # 制御点関連
+│   ├── ControlPointsPanel.vue  # 制御点設定パネル
+│   ├── CanvasArea.vue          # Canvas描画エリア
+│   ├── BackgroundImagePanel.vue # 背景画像設定
+│   └── ErrorToast.vue          # エラー表示
+├── stores/                  # Pinia状態管理
+│   ├── controlPoints.ts    # 制御点データ管理
+│   ├── ui.ts              # UI状態管理
+│   └── index.ts           # ストア統合
 └── utils/
     ├── clothoidUtils.js     # 緩和曲線計算（§9仕様準拠）
     ├── curveGenerator.js    # 多点連続曲線生成

@@ -28,15 +28,15 @@
           <div class="legend-title">線種</div>
           <div class="legend-items">
             <div class="legend-item">
-              <div class="legend-color" style="background-color: #5a9fd4;"></div>
+              <LegendIndicator variant="straight" shape="line" />
               <span>直線部</span>
             </div>
             <div class="legend-item">
-              <div class="legend-color" style="background-color: #e53e3e;"></div>
+              <LegendIndicator variant="spiral" shape="line" />
               <span>スパイラル部</span>
             </div>
             <div class="legend-item">
-              <div class="legend-color" style="background-color: #f7931e;"></div>
+              <LegendIndicator variant="arc" shape="line" />
               <span>円弧部</span>
             </div>
           </div>
@@ -45,15 +45,15 @@
           <div class="legend-title">制御点</div>
           <div class="legend-items">
             <div class="legend-item">
-              <div class="legend-point" style="background-color: #e53e3e;"></div>
+              <LegendIndicator variant="transition" shape="point" />
               <span>TS, ST</span>
             </div>
             <div class="legend-item">
-              <div class="legend-point" style="background-color: #f7931e;"></div>
+              <LegendIndicator variant="curve" shape="point" />
               <span>SC, CS</span>
             </div>
             <div class="legend-item">
-              <div class="legend-point" style="background-color: #9c27b0;"></div>
+              <LegendIndicator variant="center" shape="point" />
               <span>円弧中心</span>
             </div>
           </div>
@@ -83,6 +83,7 @@ import {
   useBackgroundStore 
 } from '@/stores'
 import type { ControlPoint } from '@/types'
+import { LegendIndicator } from '@/components/domain'
 
 // Utils imports
 import { generateClothoidCurve } from '@/utils/curveGenerator.js'
@@ -186,6 +187,12 @@ const updateCanvas = () => {
 // 曲線を再計算・再描画
 const updateCurve = () => {
   if (!renderer) return
+
+  // 制御点データの検証
+  if (!controlPointsStore.validatePoints()) {
+    console.error('Invalid control points detected, cannot update curve')
+    return
+  }
 
   // pointsの値をリアクティブに取得
   const currentPoints = controlPointsStore.points
@@ -546,7 +553,7 @@ defineExpose({
   position: relative;
   flex: 1;
   overflow: hidden;
-  background: var(--color-bg-secondary);
+  background: var(--color-bg-primary);
   border: 1px solid var(--color-border-primary);
   border-radius: var(--border-radius-md);
 }
@@ -569,40 +576,40 @@ canvas {
 }
 
 .overlay-btn {
-  padding: 5px 10px;
-  font-size: 11px;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: var(--font-size-xs);
   background: rgba(255, 255, 255, 0.9);
-  border: 1px solid #ddd;
-  border-radius: 3px;
+  border: var(--border-width) solid var(--color-border-secondary);
+  border-radius: var(--border-radius-sm);
   cursor: pointer;
-  transition: background-color 0.15s ease;
+  transition: background-color var(--transition-fast);
 }
 
 .overlay-btn:hover {
   background: rgba(255, 255, 255, 1);
-  border-color: #bbb;
+  border-color: var(--color-border-primary);
 }
 
 /* 凡例オーバーレイ */
 .legend-overlay {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: var(--spacing-sm);
+  right: var(--spacing-sm);
   background: rgba(255, 255, 255, 0.95);
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  border: var(--border-width) solid var(--color-border-secondary);
+  border-radius: var(--border-radius-md);
   padding: 0;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   max-width: 200px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
   z-index: 100;
   overflow: hidden;
 }
 
 .legend-header {
-  background: #f8f9fa;
-  padding: 8px 10px;
-  border-bottom: 1px solid #e9ecef;
+  background: var(--color-bg-primary);        /* 白背景に統一 */
+  padding: var(--spacing-md) var(--spacing-sm);
+  border-bottom: var(--border-width) solid var(--color-border-primary);
   cursor: pointer;
   display: flex;
   justify-content: space-between;
@@ -611,25 +618,25 @@ canvas {
 }
 
 .legend-header:hover {
-  background: #e9ecef;
+  background: var(--color-surface-hover);
 }
 
 .legend-title-main {
-  font-weight: 600;
-  color: #495057;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
 }
 
 .legend-toggle {
-  font-size: 10px;
-  color: #6c757d;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
 }
 
 .legend-content {
-  padding: 8px;
+  padding: var(--spacing-md);
 }
 
 .legend-section {
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-md);
 }
 
 .legend-section:last-child {
@@ -637,47 +644,35 @@ canvas {
 }
 
 .legend-title {
-  font-weight: 600;
-  color: #495057;
-  margin-bottom: 4px;
-  font-size: 10px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--spacing-xs);
+  font-size: var(--font-size-xs);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .legend-operation {
-  font-size: 9px;
-  color: #6c757d;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
   line-height: 1.3;
 }
 
 .legend-operation div {
-  margin-bottom: 1px;
+  margin-bottom: var(--spacing-xxs);
 }
 
 .legend-items {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--spacing-xxs);
 }
 
 .legend-item {
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 9px;
-  color: #6c757d;
-}
-
-.legend-color {
-  width: 12px;
-  height: 2px;
-  border-radius: 1px;
-}
-
-.legend-point {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
 }
 </style>

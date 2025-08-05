@@ -43,7 +43,31 @@ export const useControlPointsStore = defineStore('controlPoints', () => {
   const updatePoint = (index: number, updates: Partial<ControlPoint>) => {
     if (index >= 0 && index < points.value.length) {
       const point = points.value[index]
-      Object.assign(point, updates)
+      
+      // 数値バリデーション
+      if (updates.x !== undefined) {
+        if (typeof updates.x === 'number' && isFinite(updates.x)) {
+          point.x = updates.x
+        }
+      }
+      
+      if (updates.y !== undefined) {
+        if (typeof updates.y === 'number' && isFinite(updates.y)) {
+          point.y = updates.y
+        }
+      }
+      
+      if (updates.radius !== undefined) {
+        if (typeof updates.radius === 'number' && isFinite(updates.radius) && updates.radius > 0) {
+          point.radius = updates.radius
+        }
+      }
+      
+      if (updates.spiralFactor !== undefined) {
+        if (typeof updates.spiralFactor === 'number' && isFinite(updates.spiralFactor) && updates.spiralFactor > 0) {
+          point.spiralFactor = updates.spiralFactor
+        }
+      }
     }
   }
 
@@ -81,6 +105,24 @@ export const useControlPointsStore = defineStore('controlPoints', () => {
     }
   }
 
+  // 制御点データの検証
+  const validatePoints = () => {
+    const validPoints = points.value.filter(point => 
+      point && 
+      typeof point.x === 'number' && isFinite(point.x) &&
+      typeof point.y === 'number' && isFinite(point.y) &&
+      typeof point.radius === 'number' && isFinite(point.radius) && point.radius > 0 &&
+      typeof point.spiralFactor === 'number' && isFinite(point.spiralFactor) && point.spiralFactor > 0
+    )
+    
+    if (validPoints.length !== points.value.length) {
+      console.warn('Invalid control points detected, filtering out:', points.value.length - validPoints.length)
+      points.value = validPoints
+    }
+    
+    return validPoints.length >= APP_CONFIG.controlPoints.minPoints
+  }
+
   const toggleLoopMode = () => {
     isLoopMode.value = !isLoopMode.value
   }
@@ -105,6 +147,7 @@ export const useControlPointsStore = defineStore('controlPoints', () => {
     applyDefaultToAll,
     applyDefaultToAllSimple,
     canRemovePoint,
+    validatePoints,
     toggleLoopMode
   }
 })

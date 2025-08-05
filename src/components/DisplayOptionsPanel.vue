@@ -5,38 +5,44 @@
     :zIndex="103"
   >
     <PropertyRow>
-      <label class="prop-label">
-        <input type="checkbox" v-model="showGrid" @change="updateCanvas" class="prop-checkbox">
-        <span class="prop-name">グリッド表示</span>
-      </label>
+      <BaseCheckbox 
+        v-model="showGrid" 
+        @change="updateCanvas" 
+        label="グリッド表示"
+      />
     </PropertyRow>
     
     <PropertyRow>
-      <label class="prop-label">
-        <input type="checkbox" v-model="lineOnlyMode" @change="updateCanvas" class="prop-checkbox">
-        <span class="prop-name">線のみ表示</span>
-      </label>
+      <BaseCheckbox 
+        v-model="lineOnlyMode" 
+        @change="updateCanvas" 
+        label="線のみ表示"
+      />
     </PropertyRow>
     
     <PropertyRow>
-      <label class="prop-label">
-        <input type="checkbox" v-model="fillInsideMode" @change="updateCanvas" class="prop-checkbox">
-        <span class="prop-name">曲線内塗りつぶし</span>
-      </label>
+      <BaseCheckbox 
+        v-model="fillInsideMode" 
+        @change="updateCanvas" 
+        label="曲線内塗りつぶし"
+      />
     </PropertyRow>
     
     <PropertyRow>
-      <label class="prop-label">
-        <input type="checkbox" v-model="showConnectionLines" @change="updateCanvas" :disabled="lineOnlyMode" class="prop-checkbox">
-        <span class="prop-name">制御点間点線</span>
-      </label>
+      <BaseCheckbox 
+        v-model="showConnectionLines" 
+        @change="updateCanvas" 
+        :disabled="lineOnlyMode" 
+        label="制御点間点線"
+      />
     </PropertyRow>
     
     <PropertyRow>
-      <label class="prop-label">
-        <input type="checkbox" v-model="debugMode" @change="updateCanvas" class="prop-checkbox">
-        <span class="prop-name">デバッグモード</span>
-      </label>
+      <BaseCheckbox 
+        v-model="debugMode" 
+        @change="updateCanvas" 
+        label="デバッグモード"
+      />
     </PropertyRow>
   </BasePanel>
 </template>
@@ -44,8 +50,7 @@
 <script setup lang="ts">
 import { computed, defineEmits } from 'vue'
 import { useCanvasStore, useUIStore } from '@/stores'
-import BasePanel from '@/components/ui/BasePanel.vue'
-import PropertyRow from '@/components/ui/PropertyRow.vue'
+import { BasePanel, BaseCheckbox, PropertyRow } from '@/components/ui'
 
 const emit = defineEmits<{
   updateCanvas: []
@@ -96,31 +101,5 @@ const updateCanvas = () => {
 </script>
 
 <style scoped>
-/* コンポーネント固有のスタイルのみ */
-.prop-label {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-  cursor: pointer;
-  flex: 1;
-}
-
-.prop-name {
-  font-size: 11px;
-  color: var(--color-text-secondary);
-  min-width: 60px;
-  flex-shrink: 0;
-}
-
-.prop-checkbox {
-  width: 14px;
-  height: 14px;
-  margin: 0;
-  accent-color: var(--color-primary);
-}
-
-.prop-checkbox:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+/* このコンポーネントには固有のスタイルは不要 */
 </style>

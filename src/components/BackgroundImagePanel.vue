@@ -12,49 +12,76 @@
     </PropertyRow>
     
     <PropertyRow v-if="backgroundStore.backgroundImage">
-      <label class="prop-label">
-        <input type="checkbox" v-model="backgroundStore.showBackgroundImage" @change="updateCanvas" class="prop-checkbox">
-        <span class="prop-name">画像を表示</span>
-      </label>
+      <BaseCheckbox 
+        v-model="backgroundStore.showBackgroundImage" 
+        @change="updateCanvas" 
+        label="画像を表示"
+      />
     </PropertyRow>
     
     <PropertySubgroup v-if="backgroundStore.backgroundImage" title="位置・変形">
       <PropertyRow>
-        <label class="prop-name">X座標</label>
-        <input type="number" v-model.number="backgroundStore.imageSettings.x" @input="updateCanvas" class="prop-input" step="10">
-        <span class="prop-unit">px</span>
+        <PropLabel label="X座標" />
+        <BaseInput 
+          v-model="backgroundStore.imageSettings.x" 
+          type="number" 
+          :step="10" 
+          @input="updateCanvas"
+        />
+        <PropUnit unit="px" />
       </PropertyRow>
       
       <PropertyRow>
-        <label class="prop-name">Y座標</label>
-        <input type="number" v-model.number="backgroundStore.imageSettings.y" @input="updateCanvas" class="prop-input" step="10">
-        <span class="prop-unit">px</span>
+        <PropLabel label="Y座標" />
+        <BaseInput 
+          v-model="backgroundStore.imageSettings.y" 
+          type="number" 
+          :step="10" 
+          @input="updateCanvas"
+        />
+        <PropUnit unit="px" />
       </PropertyRow>
       
       <PropertyRow>
-        <label class="prop-name">スケール</label>
-        <input type="number" v-model.number="backgroundStore.imageSettings.scale" @input="updateCanvas" class="prop-input" min="0.1" max="5" step="0.1">
-        <span class="prop-unit">×</span>
+        <PropLabel label="スケール" />
+        <BaseInput 
+          v-model="backgroundStore.imageSettings.scale" 
+          type="number" 
+          :min="0.1" 
+          :max="5" 
+          :step="0.1" 
+          @input="updateCanvas"
+        />
+        <PropUnit unit="×" />
       </PropertyRow>
       
       <PropertyRow>
-        <label class="prop-name">透過度</label>
-        <input type="range" v-model.number="backgroundStore.imageSettings.opacity" @input="updateCanvas" class="prop-slider" min="0" max="1" step="0.1">
-        <span class="prop-value">{{ Math.round(backgroundStore.imageSettings.opacity * 100) }}%</span>
+        <PropLabel label="透過度" />
+        <BaseSlider 
+          v-model="backgroundStore.imageSettings.opacity" 
+          :min="0" 
+          :max="1" 
+          :step="0.1" 
+          :formatter="(val) => Math.round(val * 100).toString()"
+          unit="%" 
+          @input="updateCanvas"
+        />
       </PropertyRow>
       
       <PropertyRow>
-        <label class="prop-label">
-          <input type="checkbox" v-model="backgroundStore.imageSettings.flipX" @change="updateCanvas" class="prop-checkbox">
-          <span class="prop-name">水平反転</span>
-        </label>
+        <BaseCheckbox 
+          v-model="backgroundStore.imageSettings.flipX" 
+          @change="updateCanvas" 
+          label="水平反転"
+        />
       </PropertyRow>
       
       <PropertyRow>
-        <label class="prop-label">
-          <input type="checkbox" v-model="backgroundStore.imageSettings.flipY" @change="updateCanvas" class="prop-checkbox">
-          <span class="prop-name">垂直反転</span>
-        </label>
+        <BaseCheckbox 
+          v-model="backgroundStore.imageSettings.flipY" 
+          @change="updateCanvas" 
+          label="垂直反転"
+        />
       </PropertyRow>
     </PropertySubgroup>
   </BasePanel>
@@ -63,10 +90,17 @@
 <script setup lang="ts">
 import { ref, defineEmits } from 'vue'
 import { useBackgroundStore, useUIStore } from '@/stores'
-import BasePanel from '@/components/ui/BasePanel.vue'
-import BaseButton from '@/components/ui/BaseButton.vue'
-import PropertyRow from '@/components/ui/PropertyRow.vue'
-import PropertySubgroup from '@/components/ui/PropertySubgroup.vue'
+import { 
+  BasePanel, 
+  BaseButton, 
+  BaseInput, 
+  BaseCheckbox, 
+  BaseSlider,
+  PropertyRow,
+  PropertySubgroup,
+  PropLabel,
+  PropUnit
+} from '@/components/ui'
 
 const emit = defineEmits<{
   updateCanvas: []
@@ -105,73 +139,12 @@ const handleImageLoad = async (event: Event) => {
 
 <style scoped>
 /* コンポーネント固有のスタイルのみ */
-.prop-label {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-  cursor: pointer;
-  flex: 1;
-}
-
-.prop-name {
-  font-size: 11px;
-  color: var(--color-text-secondary);
-  min-width: 60px;
-  flex-shrink: 0;
-}
-
-.prop-input {
-  background: var(--color-bg-secondary);
+.file-input {
+  font-size: var(--font-size-xs);
+  padding: var(--spacing-xs);
   border: var(--border-width) solid var(--color-border-secondary);
   border-radius: var(--border-radius-sm);
-  color: var(--color-text-secondary);
-  padding: 3px var(--spacing-md);
-  font-size: 11px;
-  width: 60px;
-  flex-shrink: 0;
-}
-
-.prop-input:focus {
-  outline: none;
-  border-color: var(--color-focus);
-  background: #fefefe;
-}
-
-.prop-checkbox {
-  width: 14px;
-  height: 14px;
-  margin: 0;
-  accent-color: var(--color-primary);
-}
-
-.prop-slider {
-  flex: 1;
-  height: 16px;
-  background: var(--color-bg-quaternary);
-  border-radius: var(--border-radius-sm);
-  accent-color: var(--color-primary);
-}
-
-.prop-unit {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-tertiary);
-  min-width: 20px;
-  text-align: right;
-}
-
-.prop-value {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-tertiary);
-  min-width: 30px;
-  text-align: right;
-}
-
-.file-input {
-  font-size: 10px;
-  padding: 4px;
-  border: 1px solid #d1d5db;
-  border-radius: 3px;
-  background: #ffffff;
+  background: var(--color-bg-primary);
   flex: 1;
 }
 </style>

@@ -15,12 +15,11 @@ defineProps<Props>()
 
 <style scoped>
 .property-subgroup {
-  background: var(--color-bg-tertiary);       /* 設定項目は3階層目 */
+  background: var(--color-bg-secondary);      /* サブグループはセカンダリ */
   border: var(--border-width) solid var(--color-border-primary);
   border-radius: var(--border-radius-sm);
   margin: var(--spacing-md) 0;
   padding: var(--spacing-md);
-  box-shadow: var(--shadow-sm);               /* シャドウで階層を表現 */
 }
 
 .subgroup-title {
