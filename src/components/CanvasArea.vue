@@ -8,7 +8,7 @@
       </div>
 
     <!-- 凡例をキャンバス右上に配置（折りたたみ可能） -->
-    <div class="legend-overlay" v-if="!canvasStore.lineOnlyMode">
+    <div class="legend-overlay">
       <div class="legend-header" @click="showLegend = !showLegend">
         <span class="legend-title-main">操作ガイド</span>
         <span class="legend-toggle">{{ showLegend ? '▲' : '▼' }}</span>
@@ -24,7 +24,7 @@
             <div>• マウスホイールでズーム</div>
           </div>
         </div>
-        <div class="legend-section" v-if="!canvasStore.lineOnlyMode">
+        <div class="legend-section">
           <div class="legend-title">線種</div>
           <div class="legend-items">
             <div class="legend-item">
@@ -41,7 +41,7 @@
             </div>
           </div>
         </div>
-        <div class="legend-section" v-if="!canvasStore.lineOnlyMode">
+        <div class="legend-section">
           <div class="legend-title">制御点</div>
           <div class="legend-items">
             <div class="legend-item">
@@ -75,7 +75,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, computed, watch } from 'vue'
 import { 
   useControlPointsStore, 
   useCanvasStore, 
@@ -88,6 +88,7 @@ import { LegendIndicator } from '@/components/domain'
 // Utils imports
 import { generateClothoidCurve } from '@/utils/curveGenerator.js'
 import { CanvasRenderer } from '@/utils/canvasRenderer.js'
+import { setGlobalState, logger } from '@/utils/logger.js'
 
 // Props
 interface Props {
@@ -158,8 +159,19 @@ const resizeCanvas = () => {
   if (!container) return
   
   const rect = container.getBoundingClientRect()
-  canvas.value.width = rect.width
-  canvas.value.height = rect.height
+  const newWidth = rect.width
+  const newHeight = rect.height
+  
+  // サイズが変更された場合のみ更新
+  if (canvas.value.width !== newWidth || canvas.value.height !== newHeight) {
+    canvas.value.width = newWidth
+    canvas.value.height = newHeight
+    
+    // キャンバスサイズが変更された場合は再描画
+    nextTick(() => {
+      updateCanvas()
+    })
+  }
 }
 
 // キャンバスのみ再描画（曲線計算なし）
@@ -180,17 +192,18 @@ const updateCanvas = () => {
     debugMode: canvasStore.debugMode,
     overlapResults: overlapResults,
     backgroundImage: backgroundStore.backgroundImage && backgroundStore.showBackgroundImage ? backgroundStore.backgroundImage : null,
-    imageSettings: backgroundStore.imageSettings
+    imageSettings: backgroundStore.imageSettings,
+    lineWidth: canvasStore.lineWidth
   })
 }
 
 // 曲線を再計算・再描画
-const updateCurve = () => {
+const updateCurve = (isFinalResult = false) => {
   if (!renderer) return
 
   // 制御点データの検証
   if (!controlPointsStore.validatePoints()) {
-    console.error('Invalid control points detected, cannot update curve')
+    logger.curve.error('無効な制御点データが検出されました。曲線更新を中止します')
     return
   }
 
@@ -214,12 +227,13 @@ const updateCurve = () => {
       debugMode: canvasStore.debugMode,
       overlapResults: null,
       backgroundImage: backgroundStore.backgroundImage && backgroundStore.showBackgroundImage ? backgroundStore.backgroundImage : null,
-      imageSettings: backgroundStore.imageSettings
+      imageSettings: backgroundStore.imageSettings,
+      lineWidth: canvasStore.lineWidth
     })
     return
   }
 
-  const result = generateClothoidCurve(currentPoints, 60, controlPointsStore.isLoopMode, controlPointsStore.defaultSpiralFactor)
+  const result = generateClothoidCurve(currentPoints, 60, controlPointsStore.isLoopMode, controlPointsStore.defaultSpiralFactor, isFinalResult)
 
   if (result.error) {
     emit('error', result.error)
@@ -236,7 +250,8 @@ const updateCurve = () => {
       debugMode: canvasStore.debugMode,
       overlapResults: null,
       backgroundImage: backgroundStore.backgroundImage && backgroundStore.showBackgroundImage ? backgroundStore.backgroundImage : null,
-      imageSettings: backgroundStore.imageSettings
+      imageSettings: backgroundStore.imageSettings,
+      lineWidth: canvasStore.lineWidth
     })
     return
   }
@@ -265,7 +280,8 @@ const updateCurve = () => {
     debugMode: canvasStore.debugMode,
     overlapResults: overlapResults,
     backgroundImage: backgroundStore.backgroundImage && backgroundStore.showBackgroundImage ? backgroundStore.backgroundImage : null,
-    imageSettings: backgroundStore.imageSettings
+    imageSettings: backgroundStore.imageSettings,
+    lineWidth: canvasStore.lineWidth
   })
   
   emit('curveUpdated')
@@ -279,11 +295,26 @@ const updateCanvasTransform = () => {
 }
 
 // マウス座標をキャンバス座標に変換（ズーム・パンを考慮）
-const getCanvasCoords = (event: MouseEvent) => {
+const getCanvasCoords = (event: MouseEvent | WheelEvent) => {
+  if (!canvas.value) return { x: 0, y: 0 }
+  
+  try {
+    const rect = canvas.value.getBoundingClientRect()
+    const x = (event.clientX - rect.left - transform.panX) / transform.zoom
+    const y = (event.clientY - rect.top - transform.panY) / transform.zoom
+    return { x, y }
+  } catch (error) {
+    logger.curve.warn('座標変換でエラー:', error)
+    return { x: 0, y: 0 }
+  }
+}
+
+// スクリーン座標をワールド座標に変換（カーソル中心ズーム用）
+const getScreenCoords = (event: MouseEvent | WheelEvent) => {
   if (!canvas.value) return { x: 0, y: 0 }
   const rect = canvas.value.getBoundingClientRect()
-  const x = (event.clientX - rect.left - transform.panX) / transform.zoom
-  const y = (event.clientY - rect.top - transform.panY) / transform.zoom
+  const x = event.clientX - rect.left
+  const y = event.clientY - rect.top
   return { x, y }
 }
 
@@ -309,6 +340,14 @@ const getPointAtMouse = (coords: { x: number, y: number }) => {
 const calculatePreviewPoint = (coords: { x: number, y: number }) => {
   if (!currentCurveData || !currentCurveData.curve || currentCurveData.curve.length < 2) {
     return null
+  }
+
+  // 制御点との距離をチェック（制御点に近すぎる場合はプレビューを表示しない）
+  const controlPointRadius = 20 / transform.zoom // 制御点の影響範囲
+  for (let i = 0; i < points.length; i++) {
+    if (getDistanceToPoint(coords, points[i]) <= controlPointRadius) {
+      return null // 制御点に近すぎる場合はプレビューなし
+    }
   }
 
   const curve = currentCurveData.curve
@@ -347,6 +386,13 @@ const calculatePreviewPoint = (coords: { x: number, y: number }) => {
 
   const maxDistance = 30 / transform.zoom
   if (closestDistance <= maxDistance && closestPoint) {
+    // プレビュー点が制御点に近すぎないかも再チェック
+    for (let i = 0; i < points.length; i++) {
+      if (getDistanceToPoint(closestPoint, points[i]) <= controlPointRadius) {
+        return null // プレビュー点が制御点に近すぎる場合もプレビューなし
+      }
+    }
+    
     return {
       x: closestPoint.x,
       y: closestPoint.y,
@@ -371,12 +417,23 @@ const handleMouseDown = (event: MouseEvent) => {
 
   const pointIndex = getPointAtMouse(coords)
   if (pointIndex >= 0) {
+    // 安全性チェック：選択された制御点が存在するか確認
+    const selectedPoint = points[pointIndex]
+    if (!selectedPoint) {
+      logger.curve.warn('選択された制御点が見つかりません:', pointIndex)
+      return
+    }
+    
     isDragging.value = true
     dragPointIndex.value = pointIndex
     dragOffset.value = {
-      x: coords.x - points[pointIndex].x,
-      y: coords.y - points[pointIndex].y
+      x: coords.x - selectedPoint.x,
+      y: coords.y - selectedPoint.y
     }
+    
+    // ドラッグ開始をloggerに通知（ログ抑制のため）
+    setGlobalState({ isDragging: true })
+    
     emit('pointSelected', pointIndex)
     if (canvas.value) canvas.value.style.cursor = 'grabbing'
     
@@ -388,14 +445,24 @@ const handleMouseDown = (event: MouseEvent) => {
 const handleDocumentMouseMove = (event: MouseEvent) => {
   if (isDragging.value && dragPointIndex.value >= 0 && canvas.value) {
     const coords = getCanvasCoords(event)
+    
+    // 安全性チェック：ドラッグ中の制御点が存在するか確認
+    const currentPoint = points[dragPointIndex.value]
+    if (!currentPoint) {
+      logger.curve.warn('ドラッグ中の制御点が見つかりません:', dragPointIndex.value)
+      isDragging.value = false
+      dragPointIndex.value = -1
+      return
+    }
+    
     const newX = coords.x - dragOffset.value.x
     const newY = coords.y - dragOffset.value.y
     
     updatePoint(dragPointIndex.value, {
       x: newX,
       y: newY,
-      radius: points[dragPointIndex.value].radius,
-      spiralFactor: points[dragPointIndex.value].spiralFactor
+      radius: currentPoint.radius,
+      spiralFactor: currentPoint.spiralFactor
     })
     
     updateCurve()
@@ -406,6 +473,13 @@ const handleDocumentMouseUp = () => {
   if (isDragging.value) {
     isDragging.value = false
     dragPointIndex.value = -1
+    
+    // ドラッグ終了をloggerに通知（ログ抑制解除のため）
+    setGlobalState({ isDragging: false })
+    
+    // ドラッグ終了時の最終計算を実行（確定結果ログ出力のため）
+    updateCurve(true) // 第二引数をtrueにして最終結果フラグを渡す
+    
     if (canvas.value) canvas.value.style.cursor = 'crosshair'
     
     document.removeEventListener('mousemove', handleDocumentMouseMove)
@@ -418,9 +492,10 @@ const handleMouseMove = (event: MouseEvent) => {
   currentMousePos.value = coords
 
   if (isPanning.value) {
-    const newPanX = event.clientX - panStart.value.x
-    const newPanY = event.clientY - panStart.value.y
-    pan(newPanX - transform.panX, newPanY - transform.panY)
+    const deltaX = event.clientX - panStart.value.x
+    const deltaY = event.clientY - panStart.value.y
+    pan(deltaX, deltaY)
+    panStart.value = { x: event.clientX, y: event.clientY }
     updateCanvasTransform()
     return
   }
@@ -457,6 +532,17 @@ const handleMouseUp = (event: MouseEvent) => {
 const handleMouseLeave = () => {
   if (canvas.value) canvas.value.style.cursor = 'crosshair'
   previewPoint.value = null
+  
+  // ドラッグ中にマウスがキャンバスから離れた場合、ドラッグを終了
+  if (isDragging.value) {
+    isDragging.value = false
+    dragPointIndex.value = -1
+    setGlobalState({ isDragging: false })
+    
+    document.removeEventListener('mousemove', handleDocumentMouseMove)
+    document.removeEventListener('mouseup', handleDocumentMouseUp)
+  }
+  
   updateCanvas()
 }
 
@@ -501,16 +587,23 @@ const handleWheel = (event: WheelEvent) => {
   // イベントがキャンバス上で発生した場合のみ処理
   event.preventDefault()
   
-  const coords = getCanvasCoords(event)
+  // マウスのスクリーン座標を取得
+  const screenPos = getScreenCoords(event)
+  
+  // ズーム前のワールド座標を計算
+  const worldPosBeforeZoom = {
+    x: (screenPos.x - transform.panX) / transform.zoom,
+    y: (screenPos.y - transform.panY) / transform.zoom
+  }
+  
   const zoomFactor = event.deltaY > 0 ? 0.9 : 1.1
-  
   const newZoom = Math.max(0.1, Math.min(5, transform.zoom * zoomFactor))
-  const zoomRatio = newZoom / transform.zoom
   
-  const newPanX = coords.x - (coords.x - transform.panX / transform.zoom) * zoomRatio
-  const newPanY = coords.y - (coords.y - transform.panY / transform.zoom) * zoomRatio
+  // ズーム後、同じワールド座標がマウス位置になるようにパン値を調整
+  const newPanX = screenPos.x - worldPosBeforeZoom.x * newZoom
+  const newPanY = screenPos.y - worldPosBeforeZoom.y * newZoom
   
-  canvasStore.setTransform(newZoom, newPanX * newZoom, newPanY * newZoom)
+  canvasStore.setTransform(newZoom, newPanX, newPanY)
   updateCanvasTransform()
 }
 
@@ -524,6 +617,21 @@ onMounted(() => {
   resizeCanvas()
   updateCurve()
 
+  // ResizeObserverでキャンバスコンテナのサイズ変更を監視
+  const container = canvas.value.parentElement
+  if (container) {
+    const resizeObserver = new ResizeObserver(() => {
+      resizeCanvas()
+    })
+    resizeObserver.observe(container)
+    
+    // クリーンアップ用にResizeObserverを保存
+    onUnmounted(() => {
+      resizeObserver.disconnect()
+    })
+  }
+
+  // 従来のwindow resizeイベントも残しておく（フォールバック）
   window.addEventListener('resize', resizeCanvas)
 })
 
@@ -531,6 +639,11 @@ onUnmounted(() => {
   window.removeEventListener('resize', resizeCanvas)
   document.removeEventListener('mousemove', handleDocumentMouseMove)
   document.removeEventListener('mouseup', handleDocumentMouseUp)
+})
+
+// lineWidthの変更を監視してキャンバスを更新
+watch(() => canvasStore.lineWidth, () => {
+  updateCanvas()
 })
 
 // 外部からの更新を受け取るメソッドを定義

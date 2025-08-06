@@ -44,13 +44,27 @@
         label="デバッグモード"
       />
     </PropertyRow>
+    
+    <PropertyRow>
+      <span class="property-label">線の太さ</span>
+      <BaseSlider
+        v-model="lineWidth"
+        @update:modelValue="updateCanvas"
+        :min="0.5"
+        :max="8"
+        :step="0.1"
+        size="small"
+        unit="px"
+        :formatter="(value) => value.toFixed(1)"
+      />
+    </PropertyRow>
   </BasePanel>
 </template>
 
 <script setup lang="ts">
 import { computed, defineEmits } from 'vue'
 import { useCanvasStore, useUIStore } from '@/stores'
-import { BasePanel, BaseCheckbox, PropertyRow } from '@/components/ui'
+import { BasePanel, BaseCheckbox, BaseSlider, PropertyRow } from '@/components/ui'
 
 const emit = defineEmits<{
   updateCanvas: []
@@ -95,11 +109,24 @@ const debugMode = computed({
   }
 })
 
+const lineWidth = computed({
+  get: () => canvasStore.lineWidth,
+  set: (value: number) => {
+    canvasStore.lineWidth = value
+  }
+})
+
 const updateCanvas = () => {
   emit('updateCanvas')
 }
 </script>
 
 <style scoped>
-/* このコンポーネントには固有のスタイルは不要 */
+.property-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-semibold);
+  min-width: 80px;
+  text-align: left;
+}
 </style>

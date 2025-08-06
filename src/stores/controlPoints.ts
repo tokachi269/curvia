@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { ControlPoint } from '@/types'
 import { APP_CONFIG } from '@/config/app'
+import logger from '@/utils/logger.js'
 
 export const useControlPointsStore = defineStore('controlPoints', () => {
   // State
@@ -116,7 +117,7 @@ export const useControlPointsStore = defineStore('controlPoints', () => {
     )
     
     if (validPoints.length !== points.value.length) {
-      console.warn('Invalid control points detected, filtering out:', points.value.length - validPoints.length)
+      logger.curve.warn('Invalid control points detected, filtering out:', points.value.length - validPoints.length)
       points.value = validPoints
     }
     

@@ -1,6 +1,6 @@
 import { dist, getAngle, normalizeAngle } from './mathUtils.js'
 import { calculateSingleClothoid, generateSpiralPoints, generateArcPoints } from './clothoidUtils.js'
-import { logger, formatDebugInfo, PerformanceTimer } from './logger.js'
+import { logger, formatDebugInfo, PerformanceTimer, setGlobalState } from './logger.js'
 import { createError, createSuccess, isError, validate, safeExecute, ERROR_CODES } from './errorHandler.js'
 import { getUnifiedLabelIndex } from './loopProtection.js'
 
@@ -30,10 +30,41 @@ const LOOP_CONNECTION_SPEC = {
  * @param {number} speed - 設計速度（未使用だが互換性のため残す）
  * @param {boolean} isLoop - ループモード
  * @param {number} defaultSpiralFactor - デフォルトスパイラル係数
+ * @param {boolean} isFinalResult - ドラッグ終了時の最終結果フラグ
  * @returns {Object} 曲線データ
  */
-export function generateClothoidCurve(points, speed = 60, isLoop = false, defaultSpiralFactor = 2.0) {
+export function generateClothoidCurve(points, speed = 60, isLoop = false, defaultSpiralFactor = 2.0, isFinalResult = false) {
+  return generateClothoidCurveInternal(points, speed, isLoop, defaultSpiralFactor, isFinalResult)
+}
+
+/**
+ * ラッパーメソッド - isFinalResultパラメータなしで呼び出し可能
+ * @param {Array} points - 制御点配列（3点以上）
+ * @param {number} speed - 設計速度（未使用だが互換性のため残す）
+ * @param {boolean} isLoop - ループモード
+ * @param {number} defaultSpiralFactor - デフォルトスパイラル係数
+ * @returns {Object} 曲線データ
+ */
+export function generateCurve(points, speed = 60, isLoop = false, defaultSpiralFactor = 2.0) {
+  return generateClothoidCurveInternal(points, speed, isLoop, defaultSpiralFactor, false)
+}
+
+/**
+ * 内部実装 - 実際の緩和曲線生成処理
+ * @param {Array} points - 制御点配列（3点以上）
+ * @param {number} speed - 設計速度（未使用だが互換性のため残す）
+ * @param {boolean} isLoop - ループモード
+ * @param {number} defaultSpiralFactor - デフォルトスパイラル係数
+ * @param {boolean} isFinalResult - ドラッグ終了時の最終結果フラグ
+ * @returns {Object} 曲線データ
+ */
+function generateClothoidCurveInternal(points, speed = 60, isLoop = false, defaultSpiralFactor = 2.0, isFinalResult = false) {
   const timer = new PerformanceTimer('統一曲線生成')
+
+  // 最終結果フラグをloggerに一時的に設定
+  if (isFinalResult) {
+    setGlobalState({ showFinalResult: true })
+  }
 
   logger.curve.info('曲線生成開始', {
     点数: points.length,
@@ -51,6 +82,10 @@ export function generateClothoidCurve(points, speed = 60, isLoop = false, defaul
     // 入力検証
     const validationResult = validateCurveInputs(points, null, { minPoints: 3 })
     if (validationResult) {
+      // 検証エラー時も最終結果フラグをリセット
+      if (isFinalResult) {
+        setGlobalState({ showFinalResult: false })
+      }
       return { ...validationResult, debug: debugInfo }
     }
 
@@ -62,6 +97,10 @@ export function generateClothoidCurve(points, speed = 60, isLoop = false, defaul
     const segmentResult = processAllSegments(points, isLoop, defaultSpiralFactor, debugInfo)
     
     if (isError(segmentResult)) {
+      // エラー時も最終結果フラグをリセット
+      if (isFinalResult) {
+        setGlobalState({ showFinalResult: false })
+      }
       return segmentResult
     }
 
@@ -75,6 +114,11 @@ export function generateClothoidCurve(points, speed = 60, isLoop = false, defaul
       計算時間: `${totalTime.toFixed(2)}ms`,
       平均セグメント時間: `${(totalTime / totalSegments).toFixed(2)}ms`
     })
+
+    // 最終結果フラグをリセット
+    if (isFinalResult) {
+      setGlobalState({ showFinalResult: false })
+    }
 
     debugInfo += formatDebugInfo('生成完了', {
       総点数: allCurvePoints.length,
@@ -95,6 +139,10 @@ export function generateClothoidCurve(points, speed = 60, isLoop = false, defaul
 
   } catch (error) {
     logger.curve.error('例外エラー', error.message)
+    // エラー時も最終結果フラグをリセット
+    if (isFinalResult) {
+      setGlobalState({ showFinalResult: false })
+    }
     return createError(
       ERROR_CODES.UNEXPECTED_ERROR,
       `予期しないエラー: ${error.message}`,
@@ -246,6 +294,14 @@ function processAllSegments(points, isLoop, defaultSpiralFactor, debugInfo) {
 
 /**
  * 単一セグメントを処理
+ * @param {Array} points - 制御点配列
+ * @param {number} segmentIndex - セグメントインデックス
+ * @param {number} segmentCount - 総セグメント数
+ * @param {boolean} isLoop - ループモード
+ * @param {number} defaultSpiralFactor - デフォルトスパイラル係数
+ * @param {Object|null} previousSegmentST - 前のセグメントのST値
+ * @param {string} debugInfo - デバッグ情報
+ * @returns {Object} セグメント処理結果
  */
 function processSingleSegment(points, segmentIndex, segmentCount, isLoop, defaultSpiralFactor, previousSegmentST, debugInfo) {
   const timer = new PerformanceTimer(`セグメント${segmentIndex + 1}`)
@@ -300,6 +356,9 @@ function processSingleSegment(points, segmentIndex, segmentCount, isLoop, defaul
 
 /**
  * セグメントの3点を取得
+ * @param {Array} points - 制御点配列
+ * @param {number} segmentIndex - セグメントインデックス
+ * @returns {Array} セグメントの3点配列
  */
 function getSegmentPoints(points, segmentIndex) {
   return [
@@ -311,6 +370,8 @@ function getSegmentPoints(points, segmentIndex) {
 
 /**
  * セグメント設定を取得
+ * @param {Object} centerPoint - 中心点
+ * @returns {Object} セグメント設定（radius, spiralLength）
  */
 function getSegmentConfiguration(centerPoint) {
   return {
@@ -394,6 +455,19 @@ function createSegmentInfo(segmentData, segmentIndex, segmentCount, isLoop, poin
     return null
   }
 
+  // 直線の場合は簡単なセグメント情報を返す
+  if (segmentData.clothoidData.isLine) {
+    logger.curve.debug(`セグメント${segmentIndex}は直線として処理`)
+    return {
+      segmentIndex: segmentIndex,
+      type: 'straight',
+      isLine: true,
+      startPoint: segmentData.clothoidData.startPoint,
+      endPoint: segmentData.clothoidData.endPoint,
+      segments: segmentData.clothoidData.segments || []
+    }
+  }
+
   // 【統一化】統一されたラベルインデックス計算を使用
   const labelIndex = getUnifiedLabelIndex(segmentIndex, points.length, isLoop)
 
@@ -405,10 +479,11 @@ function createSegmentInfo(segmentData, segmentIndex, segmentCount, isLoop, poin
     logger.curve.debug(`ループモード対応: セグメント${segmentIndex} → P${processedPointIndex}の角を処理 → ラベル番号${labelIndex}`)
   }
 
+  // 緩和曲線の場合の詳細情報
   return {
     segmentIndex: segmentIndex, // 0ベースインデックスを保持（検索用）
     type: 'clothoid',
-    // 座標情報
+    // 座標情報（安全性チェック付き）
     TS: segmentData.clothoidData.actualTS || segmentData.clothoidData.TS,
     ST: segmentData.clothoidData.actualST || segmentData.clothoidData.ST,
     SC: segmentData.clothoidData.SC,
@@ -707,7 +782,9 @@ function calculateBasicGeometry(p0, p1, p2) {
  * 直線判定関数
  */
 function isStraightLine(deltaAngle, tolerance = 0.0017) {
-  return Math.abs(deltaAngle) < tolerance // 0.1度 = 0.0017ラジアン
+  const absAngle = Math.abs(deltaAngle)
+  // 非常に小さい角度（0.1度未満）または180度に非常に近い角度（178.2度以上）を直線とみなす
+  return absAngle < tolerance || absAngle > Math.PI * 0.99 // 0.1度未満 または 178.2度以上
 }
 
 //ー 統一曲線生成システム ========================================
@@ -879,7 +956,7 @@ function generateClothoidCurvePoints(clothoidData, points, isLastSegment, debugI
   try {
     // 必要なプロパティの確認
     if (!clothoidData.TS || !clothoidData.ST) {
-      throw new Error(`必要なプロパティが不足: TS=${!!clothoidData.TS}, ST=${!!clothoidData.ST}`)
+      throw createError('VALIDATION_ERROR', `必要なプロパティが不足: TS=${!!clothoidData.TS}, ST=${!!clothoidData.ST}`)
     }
 
     const allPoints = []

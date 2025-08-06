@@ -1,7 +1,7 @@
 <template>
   <div :class="['list-item', { 'is-nested': isNested, 'is-expandable': expandable }]">
-    <div class="list-item-content" @click="handleClick">
-      <div v-if="expandable" class="expand-icon">
+    <div class="list-item-content" @click="handleContentClick">
+      <div v-if="expandable" class="expand-icon" @click.stop="handleExpandClick">
         {{ isExpanded ? '▼' : '▶' }}
       </div>
       <div class="list-item-main">
@@ -29,13 +29,6 @@ interface Props {
   isNested?: boolean
 }
 
-interface Slots {
-  main: () => any
-  expanded?: () => any
-  actions?: () => any
-  children?: () => any
-}
-
 const props = withDefaults(defineProps<Props>(), {
   expandable: false,
   defaultExpanded: false,
@@ -47,50 +40,61 @@ const emit = defineEmits<{
   'click': [event: MouseEvent]
 }>()
 
-defineSlots<Slots>()
-
 const isExpanded = ref(props.defaultExpanded)
 
-const handleClick = (event: MouseEvent) => {
-  if (props.expandable) {
-    isExpanded.value = !isExpanded.value
-    emit('toggle', isExpanded.value)
-  }
+const handleExpandClick = () => {
+  isExpanded.value = !isExpanded.value
+  emit('toggle', isExpanded.value)
+}
+
+const handleContentClick = (event: MouseEvent) => {
   emit('click', event)
 }
 </script>
 
 <style scoped>
 .list-item {
-  border-bottom: var(--border-width) solid var(--color-border-primary);
+  display: flex;
+  flex-direction: column;
+  border: var(--border-width) solid var(--color-border-primary);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-primary);
+  transition: all var(--transition-fast);
 }
 
-.list-item:last-child {
-  border-bottom: none;
+.list-item:hover {
+  border-color: var(--color-border-secondary);
+  background: var(--color-surface-hover);
+}
+
+.list-item.is-nested {
+  margin-left: var(--spacing-md);
+  border-left: 2px solid var(--color-border-tertiary);
 }
 
 .list-item-content {
   display: flex;
   align-items: center;
-  padding: var(--spacing-md);
-  gap: var(--spacing-md);
-  min-height: 32px;
-  transition: background-color var(--transition-fast);
-}
-
-.is-expandable .list-item-content {
+  padding: var(--spacing-md) var(--spacing-lg);
   cursor: pointer;
-}
-
-.is-expandable .list-item-content:hover {
-  background: var(--color-surface-hover);
+  gap: var(--spacing-md);
 }
 
 .expand-icon {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-tertiary);
-  width: 12px;
   flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.expand-icon:hover {
+  color: var(--color-text-primary);
 }
 
 .list-item-main {
@@ -101,25 +105,22 @@ const handleClick = (event: MouseEvent) => {
 .list-item-actions {
   flex-shrink: 0;
   display: flex;
-  gap: var(--spacing-xs);
+  align-items: center;
+  gap: var(--spacing-sm);
 }
 
 .list-item-expanded {
-  padding: var(--spacing-md);
-  padding-top: 0;
-  background: var(--color-bg-secondary);      /* 展開エリアはセカンダリ */
-  border-top: var(--border-width) solid var(--color-border-primary);
+  border-top: var(--border-width) solid var(--color-border-tertiary);
+  background: var(--color-bg-secondary);
 }
 
 .list-item-children {
-  padding-left: var(--spacing-xl);
+  padding: var(--spacing-sm) 0;
 }
 
-.is-nested {
-  background: var(--color-bg-secondary);      /* ネストアイテムもセカンダリ */
-}
-
-.is-nested .list-item-content {
-  padding-left: var(--spacing-lg);
+/* 選択状態 */
+.list-item.selected {
+  border-color: var(--color-primary);
+  background: var(--color-primary-alpha-10);
 }
 </style>

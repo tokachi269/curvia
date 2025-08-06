@@ -90,6 +90,7 @@
 <script setup lang="ts">
 import { ref, defineEmits } from 'vue'
 import { useBackgroundStore, useUIStore } from '@/stores'
+import { logger } from '@/utils/logger.js'
 import { 
   BasePanel, 
   BaseButton, 
@@ -131,7 +132,7 @@ const handleImageLoad = async (event: Event) => {
     await backgroundStore.loadImage(file)
     updateCanvas()
   } catch (error) {
-    console.error('画像読み込みエラー:', error)
+    logger.curve.error('画像読み込みエラー:', error)
     alert('画像の読み込みに失敗しました')
   }
 }
@@ -146,5 +147,11 @@ const handleImageLoad = async (event: Event) => {
   border-radius: var(--border-radius-sm);
   background: var(--color-bg-primary);
   flex: 1;
+  box-shadow: var(--shadow-sm);               /* 他のコンポーネントと同じシャドウ */
+  transition: all var(--transition-fast);
+}
+
+.file-input:hover {
+  box-shadow: var(--shadow-md);               /* ホバー時はより強いシャドウ */
 }
 </style>

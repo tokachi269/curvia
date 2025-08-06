@@ -2,10 +2,9 @@
   <div class="panel">
     <div 
       class="panel-header" 
-      @click="toggleExpanded"
       :style="{ zIndex: zIndex }"
     >
-      <div class="panel-icon">{{ isExpanded ? '▼' : '▶' }}</div>
+      <div class="panel-icon" @click="toggleExpanded">▼</div>
       <div class="panel-title">{{ title }}</div>
     </div>
     <div v-show="isExpanded" class="panel-content">
@@ -42,7 +41,7 @@ const toggleExpanded = () => {
 .panel {
   background: var(--color-bg-primary);         /* パネルはプライマリ（白） */
   border: var(--border-width) solid var(--color-border-secondary);
-  border-radius: var(--border-radius-md);
+  border-radius: 0;
   margin-bottom: var(--border-width);
   overflow: hidden;
   box-shadow: var(--shadow-sm);
@@ -50,9 +49,8 @@ const toggleExpanded = () => {
 }
 
 .panel-header {
-  background: var(--color-bg-primary);        /* ヘッダーも白背景 */
-  padding: var(--spacing-lg) var(--spacing-xl);
-  cursor: pointer;
+  background: var(--color-bg-tertiary);       /* ヘッダーは tertiary でメリハリ */
+  padding: 0;
   user-select: none;
   display: flex;
   align-items: center;
@@ -63,15 +61,18 @@ const toggleExpanded = () => {
   transition: background-color var(--transition-fast);
 }
 
-.panel-header:hover {
-  background: var(--color-surface-hover);
-}
-
 .panel-icon {
   font-size: var(--font-size-xs);
   width: 12px;
   color: var(--color-text-tertiary);
   margin-right: var(--spacing-md);
+  cursor: pointer;
+  padding: var(--spacing-lg) var(--spacing-xl);
+  transition: background-color var(--transition-fast);
+}
+
+.panel-icon:hover {
+  background: var(--color-surface-hover);
 }
 
 .panel-title {
@@ -81,10 +82,11 @@ const toggleExpanded = () => {
 }
 
 .panel-content {
-  background: var(--color-bg-tertiary);
+  background: var(--color-bg-primary);        /* コンテンツは白背景 */
+  margin: var(--spacing-md) 0;
 }
 
 .property-group {
-  padding: var(--spacing-lg);
+  padding: 0;
 }
 </style>

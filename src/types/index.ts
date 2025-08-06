@@ -8,6 +8,15 @@ export interface ControlPoint {
   spiralLength?: number
 }
 
+// 線の塊（カーブグループ）の型定義
+export interface CurveGroup {
+  id: string
+  name: string
+  points: ControlPoint[]
+  visible: boolean
+  color?: string
+}
+
 // キャンバス変換の型定義
 export interface CanvasTransform {
   zoom: number

@@ -48,11 +48,22 @@ defineEmits<{
   justify-content: center;
   white-space: nowrap;
   user-select: none;
+  box-shadow: var(--shadow-sm);               /* ボタンにも立体感 */
+}
+
+.btn-base:hover:not(.btn-disabled) {
+  box-shadow: var(--shadow-md);               /* ホバー時はより強いシャドウ */
+  transform: translateY(-1px);                /* 少し浮き上がる効果 */
+}
+
+.btn-base:active:not(.btn-disabled) {
+  box-shadow: var(--shadow-sm);               /* クリック時は元に戻る */
+  transform: translateY(0);
 }
 
 .btn-base:focus {
   outline: none;
-  box-shadow: 0 0 0 2px var(--color-focus);
+  box-shadow: 0 0 0 2px var(--color-focus), var(--shadow-md);
 }
 
 /* サイズバリエーション */

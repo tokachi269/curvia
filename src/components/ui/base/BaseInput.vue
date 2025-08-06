@@ -71,13 +71,14 @@ const handleBlur = (event: Event) => {
   color: var(--color-text-secondary);
   font-family: inherit;
   transition: all var(--transition-fast);
+  box-shadow: var(--shadow-sm);               /* 軽いシャドウで立体感 */
 }
 
 .input-base:focus {
   outline: none;
   border-color: var(--color-focus);
   background: var(--color-bg-secondary);      /* フォーカス時はセカンダリ */
-  box-shadow: 0 0 0 1px var(--color-focus);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2), var(--shadow-md); /* フォーカス時はより強いシャドウ */
 }
 
 .input-base:disabled {

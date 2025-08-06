@@ -12,6 +12,13 @@ const LOG_LEVELS = {
   TRACE: 4
 }
 
+// グローバル状態管理（ドラッグ検出用）
+let globalState = {
+  isDragging: false,      // ドラッグ操作中フラグ
+  isRendering: false,     // レンダリング中フラグ
+  showFinalResult: false  // 最終結果表示フラグ
+}
+
 // ログ設定（環境変数または設定で変更可能）
 let logConfig = {
   enabled: true,              // 全体のログ有効/無効
@@ -24,6 +31,16 @@ let logConfig = {
     performance: true,        // パフォーマンス計測
     debug: true,              // デバッグ情報
     error: true               // エラーログ
+  },
+  // 頻繁な操作での抑制設定
+  suppress: {
+    renderLoop: true,         // レンダリングループ関連を抑制
+    mouseMoveEvents: true,    // マウス移動イベント関連を抑制
+    canvasRedraw: true,       // キャンバス再描画関連を抑制
+    canvasRenderer: true,     // canvasRenderer関連のデバッグログを抑制
+    segmentProcessing: true,  // セグメント処理関連を抑制
+    dragOperations: true,     // ドラッグ操作中のログを抑制
+    curveUpdate: true         // 曲線更新時のログを抑制
   }
 }
 
@@ -36,15 +53,41 @@ export function setLogConfig(config) {
 }
 
 /**
+ * グローバル状態を更新
+ * @param {Object} state - 新しい状態
+ */
+export function setGlobalState(state) {
+  globalState = { ...globalState, ...state }
+}
+
+/**
  * ログ出力の有効性をチェック
  * @param {string} category - ログカテゴリ
  * @param {number} level - ログレベル
+ * @param {string} message - ログメッセージ（特定メッセージの判定用）
  * @returns {boolean} ログ出力すべきかどうか
  */
-function shouldLog(category, level) {
+function shouldLog(category, level, message = '') {
   if (!logConfig.enabled) return false
   if (level > logConfig.level) return false
   if (logConfig.categories[category] === false) return false
+  
+  // ドラッグ操作中の抑制
+  if (globalState.isDragging && logConfig.suppress.dragOperations) {
+    // ドラッグ中は最終結果フラグが立っていても抑制
+    if (category === 'curve') {
+      return false  // ドラッグ中はすべてのcurveログを抑制
+    }
+    if (category === 'performance' && level === LOG_LEVELS.INFO) {
+      return false
+    }
+  }
+  
+  // ドラッグ終了後の最終結果表示
+  if (globalState.showFinalResult && category === 'curve' && level === LOG_LEVELS.INFO && message.includes('曲線生成完了')) {
+    return true  // 最終結果ログは必ず出力
+  }
+  
   return true
 }
 
@@ -118,7 +161,7 @@ function stringify(obj) {
  * @param {...any} args - 追加引数
  */
 function log(category, level, message, ...args) {
-  if (!shouldLog(category, level)) return
+  if (!shouldLog(category, level, message)) return
   
   const timestamp = getTimestamp()
   const caller = getCaller()
@@ -153,6 +196,7 @@ export const logger = {
     debug: (message, ...args) => log('curve', LOG_LEVELS.DEBUG, message, ...args),
     warn: (message, ...args) => log('curve', LOG_LEVELS.WARN, message, ...args),
     error: (message, ...args) => log('curve', LOG_LEVELS.ERROR, message, ...args),
+    trace: (message, ...args) => log('curve', LOG_LEVELS.TRACE, message, ...args),
   },
   
   // 描画ログ
@@ -161,6 +205,7 @@ export const logger = {
     debug: (message, ...args) => log('render', LOG_LEVELS.DEBUG, message, ...args),
     warn: (message, ...args) => log('render', LOG_LEVELS.WARN, message, ...args),
     error: (message, ...args) => log('render', LOG_LEVELS.ERROR, message, ...args),
+    trace: (message, ...args) => log('render', LOG_LEVELS.TRACE, message, ...args),
   },
   
   // パフォーマンス計測
@@ -189,7 +234,11 @@ export const logger = {
   error: {
     error: (message, ...args) => log('error', LOG_LEVELS.ERROR, message, ...args),
     warn: (message, ...args) => log('error', LOG_LEVELS.WARN, message, ...args),
-  }
+    trace: (message, ...args) => log('error', LOG_LEVELS.TRACE, message, ...args),
+  },
+  
+  // 汎用トレース関数
+  trace: (message, ...args) => log('debug', LOG_LEVELS.TRACE, message, ...args),
 }
 
 /**
@@ -270,3 +319,6 @@ export function disableDebugLogs() {
     }
   })
 }
+
+// デフォルトエクスポートとして logger を提供
+export default logger

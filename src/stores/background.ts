@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { ImageSettings } from '@/types'
 import { APP_CONFIG } from '@/config/app'
+import logger from '@/utils/logger.js'
 
 export const useBackgroundStore = defineStore('background', () => {
   // State
@@ -21,13 +22,17 @@ export const useBackgroundStore = defineStore('background', () => {
     return new Promise((resolve, reject) => {
       // ファイルサイズチェック
       if (file.size > APP_CONFIG.backgroundImage.maxFileSize) {
-        reject(new Error(`ファイルサイズが大きすぎます。最大${APP_CONFIG.backgroundImage.maxFileSize / 1024 / 1024}MBまでです。`))
+        const errorMsg = `ファイルサイズが大きすぎます。最大${APP_CONFIG.backgroundImage.maxFileSize / 1024 / 1024}MBまでです。`
+        logger.curve.error('FILE_SIZE_ERROR:', errorMsg)
+        reject(new Error(errorMsg))
         return
       }
 
       // ファイルタイプチェック
       if (!APP_CONFIG.backgroundImage.allowedTypes.includes(file.type as any)) {
-        reject(new Error('サポートされていないファイル形式です。JPEG、PNG、GIF、WebPのみ対応しています。'))
+        const errorMsg = 'サポートされていないファイル形式です。JPEG、PNG、GIF、WebPのみ対応しています。'
+        logger.curve.error('FILE_TYPE_ERROR:', errorMsg)
+        reject(new Error(errorMsg))
         return
       }
 
@@ -42,10 +47,18 @@ export const useBackgroundStore = defineStore('background', () => {
           imageSettings.value.y = -img.height / 2
           resolve()
         }
-        img.onerror = () => reject(new Error('画像の読み込みに失敗しました'))
+        img.onerror = () => {
+          const errorMsg = '画像の読み込みに失敗しました'
+          logger.curve.error('IMAGE_LOAD_ERROR:', errorMsg)
+          reject(new Error(errorMsg))
+        }
         img.src = e.target?.result as string
       }
-      reader.onerror = () => reject(new Error('ファイルの読み込みに失敗しました'))
+      reader.onerror = () => {
+        const errorMsg = 'ファイルの読み込みに失敗しました'
+        logger.curve.error('FILE_READ_ERROR:', errorMsg)
+        reject(new Error(errorMsg))
+      }
       reader.readAsDataURL(file)
     })
   }

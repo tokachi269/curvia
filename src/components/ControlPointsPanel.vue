@@ -35,97 +35,43 @@
         </PropertySubgroup>
 
         <!-- 区切り線 -->
-        <Divider spacing="md" />
+        <Divider spacing="md" variant="sketchy" />
 
-        <!-- 制御点リスト -->
-        <ListItem expandable defaultExpanded>
-            <!-- @ts-ignore -->
-            <template #main>
-                <span class="section-title">制御点 ({{ controlPointsStore.points.length }}個)</span>
-            </template>
-            <!-- @ts-ignore -->
-            <template #expanded>
-                <div class="point-list">
-                    <ListItem v-for="(point, index) in controlPointsStore.points" :key="index"
-                        :expandable="index > 0 && index < controlPointsStore.points.length - 1" :isNested="true"
-                        @click="selectPoint(index)">
-                        <!-- @ts-ignore -->
-                        <template #main>
-                            <div class="point-main" :class="{ selected: selectedPoint === index }">
-                                <div class="point-basic">
-                                    <span class="point-icon">●</span>
-                                    <span class="point-name">P{{ index }}</span>
-                                    <PointInfo :point="point" :availableWidth="getAvailableWidth()"
-                                        @expand="expandPoint(index)" />
-                                </div>
-                                <div class="point-actions">
-                                    <BaseButton v-if="controlPointsStore.canRemovePoint(index)"
-                                        @click.stop="controlPointsStore.removePoint(index)" variant="danger"
-                                        size="small">
-                                        ×
-                                    </BaseButton>
-                                </div>
-                            </div>
-                        </template>
-
-                        <!-- 中間点のパラメータ詳細 -->
-                        <!-- @ts-ignore -->
-                        <template v-if="index > 0 && index < controlPointsStore.points.length - 1" #expanded>
-                            <PointDetail :point="point" :additionalInfo="true">
-                                <!-- @ts-ignore -->
-                                <template #additional>
-                                    <div class="param-controls">
-                                        <PropertyRow>
-                                            <PropLabel label="半径" />
-                                            <BaseInput :modelValue="point.radius"
-                                                @update:modelValue="updatePointRadius(index, $event)" type="number"
-                                                :min="10" :max="500" :step="5" size="small" />
-                                            <PropUnit unit="m" />
-                                        </PropertyRow>
-
-                                        <PropertyRow>
-                                            <PropLabel label="スパイラル係数" />
-                                            <BaseInput :modelValue="point.spiralFactor"
-                                                @update:modelValue="updatePointSpiralFactor(index, $event)"
-                                                type="number" :min="0.2" :step="0.1" size="small" />
-                                        </PropertyRow>
-
-                                        <PropertyRow>
-                                            <PropLabel label="制御モード" />
-                                            <select :value="point.spiralMode || 'auto'"
-                                                @change="updatePointSpiralMode(index, $event)" class="control-select">
-                                                <option value="auto">自動</option>
-                                                <option value="manual">手動</option>
-                                            </select>
-                                        </PropertyRow>
-                                    </div>
-                                </template>
-                            </PointDetail>
-                        </template>
-                    </ListItem>
-                </div>
-            </template>
-        </ListItem>
+        <!-- 制御点レイヤーリスト -->
+        <CurveLayerList 
+            :curveGroups="curveGroups"
+            :selectedGroupId="selectedGroupId"
+            :selectedPointId="selectedPointId"
+            @selectGroup="selectGroup"
+            @selectPoint="selectPoint"
+            @removeGroup="removeGroup"
+            @removePoint="removePoint"
+            @updatePoint="updatePoint"
+            @updateRadius="updatePointRadius"
+            @updateSpiralFactor="updatePointSpiralFactor"
+            @toggleGroupVisibility="toggleGroupVisibility"
+        />
     </BasePanel>
 </template>
 
 <script setup lang="ts">
-import { ref, defineEmits } from 'vue'
+import { ref, computed, defineEmits } from 'vue'
 import { useControlPointsStore, useUIStore } from '@/stores'
 import {
     BasePanel,
-    ListPanel,
-    ListItem,
     BaseButton,
     BaseInput,
     BaseCheckbox,
     ButtonRow,
     PropertyRow,
+    PropertySubgroup,
     PropLabel,
     PropUnit,
-    Divider
+    Divider,
 } from '@/components/ui'
 import { PointInfo, PointDetail } from '@/components/domain'
+import { CurveLayerList } from '@/components/domain'
+import logger from '@/utils/logger.js'
 
 const emit = defineEmits<{
     updateCurve: []
@@ -135,11 +81,48 @@ const emit = defineEmits<{
 const controlPointsStore = useControlPointsStore()
 const uiStore = useUIStore()
 const selectedPoint = ref(-1)
+const selectedGroupId = ref('default')
+const selectedPointId = ref<string | undefined>(undefined)
+
+// 一時的に既存のpoints配列をCurveGroupに変換
+const curveGroups = computed(() => {
+    return [{
+        id: 'default',
+        name: 'カーブ 1',
+        points: controlPointsStore.points,
+        visible: true,
+        color: '#3b82f6'
+    }]
+})
+
+// グループ選択
+const selectGroup = (groupId: string) => {
+    selectedGroupId.value = groupId
+}
 
 // 制御点を選択
-const selectPoint = (index: number) => {
-    selectedPoint.value = index
-    emit('pointSelected', index)
+const selectPoint = (groupId: string, pointIndex: number) => {
+    selectedPoint.value = pointIndex
+    selectedPointId.value = `${groupId}-${pointIndex}`
+    emit('pointSelected', pointIndex)
+}
+
+// グループ削除（暫定的に無効化）
+const removeGroup = (groupId: string) => {
+    // 今は1つのグループのみなので削除しない
+    console.log('Group removal not implemented yet')
+}
+
+// 制御点削除
+const removePoint = (groupId: string, pointIndex: number) => {
+    controlPointsStore.removePoint(pointIndex)
+    updateCurve()
+}
+
+// グループ表示切り替え（暫定的に無効化）
+const toggleGroupVisibility = (groupId: string) => {
+    // 今は表示切り替えは実装しない
+    console.log('Group visibility toggle not implemented yet')
 }
 
 const updateCurve = () => {
@@ -165,18 +148,18 @@ const updatePointY = (index: number, event: Event) => {
     }
 }
 
-const updatePointRadius = (index: number, value: number | string) => {
+const updatePointRadius = (groupId: string, pointIndex: number, value: number | string) => {
     const numValue = typeof value === 'string' ? parseFloat(value) : value
     if (!isNaN(numValue)) {
-        controlPointsStore.updatePoint(index, { radius: numValue })
+        controlPointsStore.updatePoint(pointIndex, { radius: numValue })
         updateCurve()
     }
 }
 
-const updatePointSpiralFactor = (index: number, value: number | string) => {
+const updatePointSpiralFactor = (groupId: string, pointIndex: number, value: number | string) => {
     const numValue = typeof value === 'string' ? parseFloat(value) : value
     if (!isNaN(numValue)) {
-        controlPointsStore.updatePoint(index, { spiralFactor: numValue })
+        controlPointsStore.updatePoint(pointIndex, { spiralFactor: numValue })
         updateCurve()
     }
 }
@@ -185,6 +168,13 @@ const updatePointSpiralMode = (index: number, event: Event) => {
     const target = event.target as HTMLSelectElement
     const value = target.value as 'auto' | 'manual'
     controlPointsStore.updatePoint(index, { spiralMode: value })
+    updateCurve()
+}
+
+// 新しい階層的インターフェース用のupdatePoint関数
+const updatePoint = (groupId: string, pointIndex: number, updates: any) => {
+    // 暫定的な実装: 最初のグループのポイントを更新
+    controlPointsStore.updatePoint(pointIndex, updates)
     updateCurve()
 }
 
@@ -197,7 +187,7 @@ const getAvailableWidth = () => {
 // 制御点の詳細表示を展開
 const expandPoint = (index: number) => {
     // 必要に応じて詳細表示のロジックを実装
-    console.log('Expand point:', index)
+    logger.debug('Expand point:', index)
 }
 </script>
 

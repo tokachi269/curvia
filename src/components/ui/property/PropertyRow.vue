@@ -15,5 +15,6 @@
   gap: var(--spacing-md);
   margin-bottom: var(--spacing-sm);
   min-height: 22px;
+  padding: 0 var(--spacing-xl);
 }
 </style>

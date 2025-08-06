@@ -55,6 +55,7 @@ import BackgroundImagePanel from '@/components/BackgroundImagePanel.vue'
 import ControlPointsPanel from '@/components/ControlPointsPanel.vue'
 import CanvasArea from '@/components/CanvasArea.vue'
 import ErrorToast from '@/components/ErrorToast.vue'
+import { logger } from '@/utils/logger.js'
 
 // フォント読み込み状態
 const fontsLoaded = ref(false)
@@ -87,7 +88,7 @@ const loadFonts = async () => {
       fontsLoaded.value = true
     }, 200)
   } catch (error) {
-    console.warn('Font loading failed, showing app anyway:', error)
+    logger.curve.warn('フォント読み込み失敗、アプリを表示します:', error)
     setTimeout(() => {
       fontsLoaded.value = true
     }, 200)
@@ -158,32 +159,35 @@ html, body {
 :root {
   /* Background Colors - 階層表現のための3色 */
   --color-bg-primary: #ffffff;      /* メイン背景（カード、パネルヘッダー） */
-  --color-bg-secondary: #e6eef6;    /* サイドバー背景 */
-  --color-bg-tertiary: #f1f5f9;     /* 設定項目背景（ヘッダーより少し濃い） */
+  --color-bg-secondary: #f8fafc;    /* サイドバー背景 - 明るいグレー */
+  --color-bg-tertiary: #f1f5f9;     /* 設定項目背景（適度な階層感） */
   
   --color-border-primary: #e2e8f0;      /* 薄いボーダー */
   --color-border-secondary: #cbd5e1;    /* 中間ボーダー */
   --color-border-tertiary: #94a3b8;     /* 濃いボーダー */
   
-  --color-text-primary: #111827;        /* より濃い黒 */
-  --color-text-secondary: #374151;      /* より濃いグレー */
-  --color-text-tertiary: #6b7280;       /* 中間グレー */
-  --color-text-quaternary: #374151;     /* セカンダリと同じ */
-  --color-text-muted: #9ca3af;          /* より薄いグレー */
+  --color-text-primary: #1e293b;        /* 濃い黒 - 適度なコントラスト */
+  --color-text-secondary: #334155;      /* 程よい濃さのグレー */
+  --color-text-tertiary: #64748b;       /* 中間グレー - 読みやすい */
+  --color-text-quaternary: #334155;     /* セカンダリと同じ */
+  --color-text-muted: #94a3b8;          /* 薄いグレー */
   
-  --color-surface-hover: #e5e7eb;       /* 元のホバー */
-  --color-surface-active: #e9ecef;     /* 元のアクティブ */
+  --color-surface-hover: #f1f5f9;       /* ホバー - 明るめ */
+  --color-surface-active: #e2e8f0;      /* アクティブ - 適度な色 */
   
   /* UI コンポーネント用カラー */
-  --color-primary: #3b82f6;
+  --color-primary: #3b82f6;             /* 明るいブルー */
   --color-primary-hover: #2563eb;
-  --color-secondary: #6b7280;
-  --color-secondary-hover: #4b5563;
-  --color-success: #10b981;
+  --color-secondary: #64748b;           /* 明るめのグレー */
+  --color-secondary-hover: #475569;
+  --color-success: #10b981;             /* 明るいグリーン */
   --color-success-hover: #059669;
-  --color-danger: #ef4444;
+  --color-danger: #ef4444;              /* 明るいレッド */
   --color-danger-hover: #dc2626;
+  --color-danger-bg: rgba(239, 68, 68, 0.1);  /* 削除ボタンホバー背景 */
   --color-focus: #3b82f6;
+  --color-accent: #3b82f6;               /* アクセントカラー（プライマリと同じ） */
+  --color-surface-selected: #dbeafe;     /* 選択状態の背景 */
   
   /* スペーシング */
   --spacing-xxs: 1px;
@@ -199,12 +203,12 @@ html, body {
   --border-radius-md: 4px;
   --border-width: 1px;
   
-  /* シャドウ - 階層表現の主要手段 */
+  /* シャドウ - 右下方向の自然な影（薄め） */
   --shadow-none: none;
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.06);
-  --shadow-xl: 0 8px 16px rgba(0, 0, 0, 0.1), 0 4px 8px rgba(0, 0, 0, 0.06);
+  --shadow-sm: 1px 1px 3px rgba(0, 0, 0, 0.08), 0px 1px 1px rgba(0, 0, 0, 0.05);
+  --shadow-md: 2px 2px 6px rgba(0, 0, 0, 0.1), 1px 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 4px 4px 12px rgba(0, 0, 0, 0.12), 2px 2px 6px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 6px 6px 18px rgba(0, 0, 0, 0.14), 3px 3px 9px rgba(0, 0, 0, 0.12);
   
   /* z-index */
   --z-sticky-header: 100;

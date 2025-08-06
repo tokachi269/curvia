@@ -81,7 +81,15 @@ export function calculateSingleClothoid(points, radius, spiralLength = null, def
     // §9.1 角度を計算
     const Az_in = getAngle([P0.x, P0.y], [P1.x, P1.y])
     const Az_out = getAngle([P1.x, P1.y], [P2.x, P2.y])
-    const defl = normalizeAngle(Az_out - Az_in)
+    
+    // 偏角計算：常に最小角度（0〜π）を使用
+    let defl = normalizeAngle(Az_out - Az_in)
+    
+    // 180度を超える場合は反対方向の角度を使用
+    if (Math.abs(defl) > Math.PI) {
+      defl = defl > 0 ? defl - 2 * Math.PI : defl + 2 * Math.PI
+    }
+    
     const sgn = defl >= 0 ? 1 : -1
     const absDef = Math.abs(defl)
     
@@ -110,9 +118,9 @@ export function calculateSingleClothoid(points, radius, spiralLength = null, def
     }
     
     // 180度近い角度の場合も直線として処理
-    if (absDef > Math.PI * 0.95) {  // 171度以上（180度に近い）を直線とみなす
-      logger.curve.info('直線として処理（角度が180度に近い）')
-      debugInfo += '直線として処理（角度が180度に近すぎます）\n'
+    if (absDef > Math.PI * 0.99) {  // 178.2度以上（180度に非常に近い）を直線とみなす
+      logger.curve.info('直線として処理（角度が180度に非常に近い）')
+      debugInfo += '直線として処理（角度が180度に非常に近すぎます）\n'
       return createSuccess({
         isLine: true,
         curve: [P0, P1, P2]
@@ -161,10 +169,11 @@ export function calculateSingleClothoid(points, radius, spiralLength = null, def
     debugInfo += `Yc: ${Yc.toFixed(6)} (Ls²/(6R))\n`
     debugInfo += `Xc: ${Xc.toFixed(6)} (7次近似)\n`
     
-    // コンソール出力（検証用）
-    console.log(`=== 高精度緩和曲線計算 ===`)
-    console.log(`Yc: ${Yc.toFixed(6)} (Ls²/(6R))`)
-    console.log(`Xc: ${Xc.toFixed(6)} (7次近似)`)
+    logger.curve.debug('高精度緩和曲線計算詳細', {
+      Yc: Yc.toFixed(6),
+      Xc: Xc.toFixed(6),
+      計算方式: '7次近似'
+    })
     
     // シフト補正計算
     const rho = Yc - radius * (1 - Math.cos(th_s))
@@ -173,14 +182,14 @@ export function calculateSingleClothoid(points, radius, spiralLength = null, def
     // §9.7 PI→TS距離
     const Ts = (radius + rho) * Math.tan(absDef / 2) + k
     
-    // デバッグ出力（検証用）
-    console.log(`=== 緩和曲線計算完了 ===`)
-    console.log(`Ls: ${spiralLength.toFixed(3)}m, R: ${radius}m`)
-    console.log(`θs: ${(th_s * 180 / Math.PI).toFixed(2)}°`)
-    console.log(`rho: ${rho.toFixed(6)}, k: ${k.toFixed(6)}`)
-    console.log(`Ts (旧誤差): 推定 ${(spiralLength + radius * Math.tan(absDef/2)).toFixed(3)}m`)
-    console.log(`Ts (正確式): ${Ts.toFixed(3)}m`)
-    console.log(`========================================`)
+    logger.curve.debug('緩和曲線計算完了', {
+      スパイラル長: `${spiralLength.toFixed(3)}m`,
+      半径: `${radius}m`,
+      螺旋角: `${(th_s * 180 / Math.PI).toFixed(2)}°`,
+      rho: rho.toFixed(6),
+      k: k.toFixed(6),
+      Ts_正確式: `${Ts.toFixed(3)}m`
+    })
     
     debugInfo += `=== 最終Ts計算（§9.7）===\n`
     debugInfo += `(R+ρ): ${(radius + rho).toFixed(3)}\n`

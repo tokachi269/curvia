@@ -176,12 +176,12 @@ export class CanvasRenderer {
     }
   }
 
-  drawCurve(curve) {
+  drawCurve(curve, lineWidth = 2) {
     if (curve.length === 0) return
     
     const ctx = this.ctx
     ctx.strokeStyle = COLORS.straight
-    ctx.lineWidth = 3
+    ctx.lineWidth = lineWidth
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
     
@@ -208,10 +208,11 @@ export class CanvasRenderer {
       return false
     }
     
-    logger.curve.debug(`drawClothoidCurve - セグメント情報 ${segments.length}個`)
+    // デバッグログを抑制（頻繁な呼び出しのため）
+    // logger.curve.debug(`drawClothoidCurve - セグメント情報 ${segments.length}個`)
     
     const ctx = this.ctx
-    ctx.lineWidth = 3
+    ctx.lineWidth = options.lineWidth || 2
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
     
@@ -227,7 +228,8 @@ export class CanvasRenderer {
       if (renderSuccess) successCount++
     }, 'drawClothoidCurve_segments')
     
-    logger.curve.debug(`セグメント描画完了: ${successCount}/${segments.length}`)
+    // デバッグログを抑制（頻繁な呼び出しのため）
+    // logger.curve.debug(`セグメント描画完了: ${successCount}/${segments.length}`)
     return successCount > 0
   }
 
@@ -291,7 +293,8 @@ export class CanvasRenderer {
           }
           ctx.stroke()
           
-          logger.curve.debug(`セグメント ${index} drawingSeg ${segIndex} (${drawSegType}) 描画完了 ${drawSeg.points.length}点`)
+          // デバッグログを抑制（頻繁な呼び出しのため）
+          // logger.curve.debug(`セグメント ${index} drawingSeg ${segIndex} (${drawSegType}) 描画完了 ${drawSeg.points.length}点`)
         }
       }, `segment_${index}_drawingSegments`)
       
@@ -320,7 +323,8 @@ export class CanvasRenderer {
     }
     ctx.stroke()
     
-    logger.curve.debug(`セグメント ${index} (${segmentType}) 描画完了 ${pointsToRender.length}点`)
+    // デバッグログを抑制（頻繁な呼び出しのため）
+    // logger.curve.debug(`セグメント ${index} (${segmentType}) 描画完了 ${pointsToRender.length}点`)
     return true
   }
 
@@ -705,7 +709,7 @@ export class CanvasRenderer {
           
           // 接続セグメント（connection、loop-connection）はラベル描画をスキップ
           if (segment.type === 'connection' || segment.type === 'loop-connection') {
-            logger.curve.debug(`canvasRenderer ループモード接続セグメントスキップ: type=${segment.type}, arrayIndex=${arrayIndex}`)
+            // logger.curve.debug(`canvasRenderer ループモード接続セグメントスキップ: type=${segment.type}, arrayIndex=${arrayIndex}`)
             return
           }
           
@@ -732,7 +736,8 @@ export class CanvasRenderer {
           const stLabel = segment.STLabel || `ST${labelIndex}`
           const centerLabel = segment.SCLabel ? segment.SCLabel.replace('SC', 'C') : `C${labelIndex}`
           
-          logger.curve.debug(`canvasRenderer ループモードセグメント${segmentIndex} (arrayIndex=${arrayIndex}): labelIndex=${labelIndex}, ラベル={TS:${tsLabel}, SC:${scLabel}, CS:${csLabel}, ST:${stLabel}}`)
+          // デバッグログを抑制（頻繁な呼び出しのため）
+          // logger.curve.debug(`canvasRenderer ループモードセグメント${segmentIndex} (arrayIndex=${arrayIndex}): labelIndex=${labelIndex}, ラベル={TS:${tsLabel}, SC:${scLabel}, CS:${csLabel}, ST:${stLabel}}`)
           
           // 実際の座標位置にTS/SC/CS/ST点を表示
           const points = [
@@ -769,7 +774,7 @@ export class CanvasRenderer {
           
           // 接続セグメント（connection、loop-connection）はラベル描画をスキップ
           if (segment.type === 'connection' || segment.type === 'loop-connection') {
-            logger.curve.debug(`canvasRenderer 接続セグメントスキップ: type=${segment.type}, arrayIndex=${arrayIndex}`)
+            // logger.curve.debug(`canvasRenderer 接続セグメントスキップ: type=${segment.type}, arrayIndex=${arrayIndex}`)
             return
           }
           
@@ -790,7 +795,8 @@ export class CanvasRenderer {
           const stLabel = segment.STLabel || `ST${labelIndex}`
           const centerLabel = segment.SCLabel ? segment.SCLabel.replace('SC', 'C') : `C${labelIndex}`
           
-          logger.curve.debug(`canvasRenderer セグメント${segmentIndex} (arrayIndex=${arrayIndex}): isLoop=${isLoopMode}, labelIndex=${labelIndex}, ラベル={TS:${tsLabel}, SC:${scLabel}, CS:${csLabel}, ST:${stLabel}}`)
+          // デバッグログを抑制（頻繁な呼び出しのため）
+          // logger.curve.debug(`canvasRenderer セグメント${segmentIndex} (arrayIndex=${arrayIndex}): isLoop=${isLoopMode}, labelIndex=${labelIndex}, ラベル={TS:${tsLabel}, SC:${scLabel}, CS:${csLabel}, ST:${stLabel}}`)
           
           // 実際の座標位置にTS/SC/CS/ST点を表示
           const points = [
@@ -1075,10 +1081,12 @@ export class CanvasRenderer {
       debugMode = false,
       overlapResults = null,
       backgroundImage = null,
-      imageSettings = null
+      imageSettings = null,
+      lineWidth = 2  // 線の太さパラメータを追加
     } = options
 
-    logger.curve.debug(`render() 呼び出し curve:${curve ? `${curve.length}点` : 'null'} clothoidData:${clothoidData ? '存在' : 'null'} segments:${clothoidData?.segments ? `${clothoidData.segments.length}個` : 'なし'} fillInside:${fillInsideMode} isLoop:${isLoopMode}`)
+    // デバッグログを抑制（頻繁な呼び出しのため）
+    // logger.curve.debug(`render() 呼び出し curve:${curve ? `${curve.length}点` : 'null'} clothoidData:${clothoidData ? '存在' : 'null'} segments:${clothoidData?.segments ? `${clothoidData.segments.length}個` : 'なし'} fillInside:${fillInsideMode} isLoop:${isLoopMode}`)
     
     this.clear()
     
@@ -1097,7 +1105,7 @@ export class CanvasRenderer {
     }
     
     // 曲線描画（統一化された処理）
-    this.renderCurveData(curve, clothoidData, { lineOnlyMode, isLoopMode })
+    this.renderCurveData(curve, clothoidData, { lineOnlyMode, isLoopMode, lineWidth })
     
     // UI要素描画
     if (!lineOnlyMode) {
@@ -1142,14 +1150,15 @@ export class CanvasRenderer {
     
     // 1. セグメントデータがある場合は優先的に使用
     if (clothoidData && clothoidData.segments && clothoidData.segments.length > 0) {
-      logger.curve.debug(`セグメント描画を実行 ${clothoidData.segments.length}個`)
+      // デバッグログを抑制（頻繁な呼び出しのため）
+      // logger.curve.debug(`セグメント描画を実行 ${clothoidData.segments.length}個`)
       renderSuccess = this.drawClothoidCurve(clothoidData.segments, options)
     }
     
     // 2. セグメント描画が失敗またはデータがない場合は通常曲線描画
     if (!renderSuccess && curve && curve.length > 0) {
       logger.curve.debug(`通常曲線描画を実行: ${curve.length}点`)
-      this.drawCurve(curve)
+      this.drawCurve(curve, options.lineWidth)
       renderSuccess = true
     }
     
@@ -1235,11 +1244,11 @@ export class CanvasRenderer {
           centerX = (segment.ST.x + segment.TS.x) / 2
           centerY = (segment.ST.y + segment.TS.y) / 2
         } else {
-          console.warn(`セグメント${overlap.segmentIndex}にST/TSデータが存在しません`)
+          logger.curve.warn(`セグメント${overlap.segmentIndex}にST/TSデータが存在しません`)
           return
         }
       } else {
-        console.warn(`オーバーラップ${index}の位置情報が不足しています`, overlap)
+        logger.curve.warn(`オーバーラップ${index}の位置情報が不足しています`, overlap)
         return
       }
 

@@ -16,6 +16,7 @@ export const useCanvasStore = defineStore('canvas', () => {
   const fillInsideMode = ref(false)
   const showConnectionLines = ref(true)
   const debugMode = ref(false)
+  const lineWidth = ref(2) // 線の太さ（デフォルト: 2px）
 
   // Canvas element ref
   const canvasElement = ref<HTMLCanvasElement | null>(null)
@@ -125,6 +126,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     fillInsideMode,
     showConnectionLines,
     debugMode,
+    lineWidth,
     canvasElement,
     
     // Getters
