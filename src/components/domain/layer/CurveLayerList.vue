@@ -264,6 +264,11 @@ const updateSpiralFactor = (groupId: string, pointIndex: number, event: Event) =
 </script>
 
 <style scoped>
+/* 曲線レイヤーリストコンテナ */
+.curve-layer-list {
+    padding: var(--spacing-md);
+}
+
 /* 曲線グループ固有スタイル */
 .group-content {
     display: flex;

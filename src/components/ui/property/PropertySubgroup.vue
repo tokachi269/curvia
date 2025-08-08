@@ -15,7 +15,7 @@ defineProps<Props>()
 
 <style scoped>
 .property-subgroup {
-  background: var(--color-bg-secondary);      /* サブグループはセカンダリ */
+  background: var(--color-bg-primary);
   border: var(--border-width) solid var(--color-border-primary);
   border-radius: var(--border-radius-sm);
   margin: var(--spacing-md) 0;
