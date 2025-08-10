@@ -50,6 +50,8 @@
             @updateRadius="updatePointRadius"
             @updateSpiralFactor="updatePointSpiralFactor"
             @toggleGroupVisibility="toggleGroupVisibility"
+            @toggleGroupOverlapResolution="handleToggleGroupOverlapResolution"
+            @togglePointOverlapResolution="handleTogglePointOverlapResolution"
         />
     </BasePanel>
 </template>
@@ -76,6 +78,7 @@ import logger from '@/utils/logger.js'
 const emit = defineEmits<{
     updateCurve: []
     pointSelected: [index: number]
+    overlapResolutionChanged: [settings: { enabled: boolean, mode: 'global' | 'individual' }]
 }>()
 
 const controlPointsStore = useControlPointsStore()
@@ -84,14 +87,27 @@ const selectedPoint = ref(-1)
 const selectedGroupId = ref('default')
 const selectedPointId = ref<string | undefined>(undefined)
 
+// 重複解消設定のローカル状態
+const groupOverlapSettings = ref({
+    enabled: false,
+    mode: 'global' as 'global' | 'individual'
+})
+
 // 一時的に既存のpoints配列をCurveGroupに変換
 const curveGroups = computed(() => {
+    // 制御点にグループ設定を注入
+    const pointsWithGroupSettings = controlPointsStore.points.map(point => ({
+        ...point,
+        groupOverlapResolution: groupOverlapSettings.value
+    }))
+    
     return [{
         id: 'default',
         name: 'カーブ 1',
-        points: controlPointsStore.points,
+        points: pointsWithGroupSettings,
         visible: true,
-        color: '#3b82f6'
+        color: '#3b82f6',
+        overlapResolution: groupOverlapSettings.value
     }]
 })
 
@@ -127,6 +143,26 @@ const toggleGroupVisibility = (groupId: string) => {
 
 const updateCurve = () => {
     emit('updateCurve')
+}
+
+// 重複解消制御ハンドラー
+const handleToggleGroupOverlapResolution = (groupId: string) => {
+    groupOverlapSettings.value.enabled = !groupOverlapSettings.value.enabled
+    emit('overlapResolutionChanged', groupOverlapSettings.value)
+    updateCurve()
+}
+
+const handleTogglePointOverlapResolution = (groupId: string, pointIndex: number) => {
+    // 個別制御点の重複解消設定を切り替え
+    const point = controlPointsStore.points[pointIndex]
+    if (point) {
+        if (!point.overlapResolution) {
+            point.overlapResolution = { enabled: true, mode: 'individual' }
+        } else {
+            point.overlapResolution.enabled = !point.overlapResolution.enabled
+        }
+        updateCurve()
+    }
 }
 
 // 制御点の座標を安全に更新

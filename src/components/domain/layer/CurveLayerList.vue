@@ -51,16 +51,33 @@
 
         <!-- グループアクション -->
         <template #actions>
-          <button 
-            v-if="selectedGroupId === group.id && canRemoveGroup(groupIndex)"
-            class="remove-btn"
-            @click.stop="$emit('removeGroup', group.id)"
-            title="グループ削除"
-          >
-            <svg class="remove-icon" viewBox="0 0 24 24">
-              <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-            </svg>
-          </button>
+          <div class="group-actions">
+            <!-- 重複解消設定 -->
+            <div class="overlap-controls">
+              <label class="overlap-checkbox-label">
+                <input 
+                  type="checkbox"
+                  class="overlap-checkbox"
+                  :checked="group.overlapResolution?.enabled"
+                  @change="toggleGroupOverlapResolution(group.id)"
+                  @click.stop
+                >
+                <span class="overlap-label-text">重複解消</span>
+              </label>
+            </div>
+            
+            <!-- 削除ボタン -->
+            <button 
+              v-if="selectedGroupId === group.id && canRemoveGroup(groupIndex)"
+              class="remove-btn"
+              @click.stop="$emit('removeGroup', group.id)"
+              title="グループ削除"
+            >
+              <svg class="remove-icon" viewBox="0 0 24 24">
+                <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+              </svg>
+            </button>
+          </div>
         </template>
 
         <!-- 制御点リスト（展開コンテンツ） -->
@@ -94,7 +111,10 @@
                     <div class="point-details">
                       {{ Math.round(point.x) }}, {{ Math.round(point.y) }}
                       <span v-if="pointIndex > 0 && pointIndex < group.points.length - 1">
-                        • R{{ point.radius }}
+                        • R{{ getDisplayRadius(point) }}
+                        <span v-if="point.adjustment" class="adjustment-indicator" :title="getAdjustmentTooltip(point)">
+                          *
+                        </span>
                       </span>
                     </div>
                   </div>
@@ -103,16 +123,34 @@
 
               <!-- 制御点アクション -->
               <template #actions>
-                <button 
-                  v-if="selectedPointId === `${group.id}-${pointIndex}` && canRemovePoint(pointIndex, group.points.length)"
-                  class="remove-btn"
-                  @click.stop="$emit('removePoint', group.id, pointIndex)"
-                  title="制御点削除"
-                >
-                  <svg class="remove-icon" viewBox="0 0 24 24">
-                    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-                  </svg>
-                </button>
+                <div class="point-actions">
+                  <!-- 個別制御点の重複解消設定（制御点のみ、開始点と終了点以外） -->
+                  <label 
+                    v-if="pointIndex > 0 && pointIndex < group.points.length - 1"
+                    class="point-overlap-checkbox-label"
+                  >
+                    <input 
+                      type="checkbox"
+                      class="point-overlap-checkbox"
+                      :checked="point.overlapResolution?.enabled"
+                      @change="togglePointOverlapResolution(group.id, pointIndex)"
+                      @click.stop
+                    >
+                    <span class="point-overlap-label-text">重複解消</span>
+                  </label>
+                  
+                  <!-- 削除ボタン -->
+                  <button 
+                    v-if="selectedPointId === `${group.id}-${pointIndex}` && canRemovePoint(pointIndex, group.points.length)"
+                    class="remove-btn"
+                    @click.stop="$emit('removePoint', group.id, pointIndex)"
+                    title="制御点削除"
+                  >
+                    <svg class="remove-icon" viewBox="0 0 24 24">
+                      <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                    </svg>
+                  </button>
+                </div>
               </template>
 
               <!-- 制御点展開コンテンツ -->
@@ -138,22 +176,39 @@
                   </div>
                   <div class="param-row">
                     <label>半径</label>
-                    <input 
-                      type="number" 
-                      :value="point.radius" 
-                      @input="updateRadius(group.id, pointIndex, $event)"
-                      class="param-input"
-                    >
+                    <div class="param-with-adjustment">
+                      <input 
+                        type="number" 
+                        :value="point.radius" 
+                        @input="updateRadius(group.id, pointIndex, $event)"
+                        class="param-input"
+                        :class="{ 'has-adjustment': point.adjustment }"
+                      >
+                      <div v-if="point.adjustment" class="adjustment-display">
+                        → {{ getDisplayRadius(point) }}
+                      </div>
+                    </div>
                   </div>
                   <div class="param-row">
                     <label>スパイラル係数</label>
-                    <input 
-                      type="number" 
-                      :value="point.spiralFactor" 
-                      @input="updateSpiralFactor(group.id, pointIndex, $event)"
-                      class="param-input"
-                      step="0.1"
-                    >
+                    <div class="param-with-adjustment">
+                      <input 
+                        type="number" 
+                        :value="point.spiralFactor" 
+                        @input="updateSpiralFactor(group.id, pointIndex, $event)"
+                        class="param-input"
+                        :class="{ 'has-adjustment': point.adjustment }"
+                        step="0.1"
+                      >
+                      <div v-if="point.adjustment" class="adjustment-display">
+                        → {{ getDisplaySpiralFactor(point) }}
+                      </div>
+                    </div>
+                  </div>
+                  <div v-if="point.adjustment" class="adjustment-info">
+                    <div class="adjustment-reason">
+                      {{ getAdjustmentReason(point.adjustment) }}
+                    </div>
                   </div>
                 </div>
               </template>
@@ -186,6 +241,8 @@ const emit = defineEmits<{
   updateRadius: [groupId: string, pointIndex: number, value: number]
   updateSpiralFactor: [groupId: string, pointIndex: number, value: number]
   toggleGroupVisibility: [groupId: string]
+  toggleGroupOverlapResolution: [groupId: string]
+  togglePointOverlapResolution: [groupId: string, pointIndex: number]
 }>()
 
 const totalPointsCount = computed(() => {
@@ -205,6 +262,15 @@ const handlePointClick = (point: ControlPoint, pointIndex: number, group: CurveG
 // 可視性切り替え
 const toggleGroupVisibility = (groupId: string) => {
   emit('toggleGroupVisibility', groupId)
+}
+
+// 重複解消制御
+const toggleGroupOverlapResolution = (groupId: string) => {
+  emit('toggleGroupOverlapResolution', groupId)
+}
+
+const togglePointOverlapResolution = (groupId: string, pointIndex: number) => {
+  emit('togglePointOverlapResolution', groupId, pointIndex)
 }
 
 // 削除可能判定
@@ -259,6 +325,42 @@ const updateSpiralFactor = (groupId: string, pointIndex: number, event: Event) =
   const value = parseFloat(target.value)
   if (!isNaN(value) && value >= 0) {
     emit('updateSpiralFactor', groupId, pointIndex, value)
+  }
+}
+
+// 調整値表示関数
+const getDisplayRadius = (point: ControlPoint) => {
+  return point.adjustedRadius ? point.adjustedRadius.toFixed(1) : point.radius.toString()
+}
+
+const getDisplaySpiralFactor = (point: ControlPoint) => {
+  return point.adjustedSpiralFactor ? point.adjustedSpiralFactor.toFixed(1) : point.spiralFactor.toString()
+}
+
+const getAdjustmentTooltip = (point: ControlPoint) => {
+  if (!point.adjustment) return ''
+  
+  const { type, reason, radiusScale } = point.adjustment
+  const scalePercent = Math.round(radiusScale * 100)
+  
+  switch (reason) {
+    case 'overlap-prevention':
+      return `重複回避のため ${scalePercent}% に縮小されています`
+    case 'space-optimization':
+      return `スペース最適化のため ${scalePercent}% に調整されています`
+    default:
+      return `${type}調整により ${scalePercent}% に変更されています`
+  }
+}
+
+const getAdjustmentReason = (adjustment: any) => {
+  switch (adjustment.reason) {
+    case 'overlap-prevention':
+      return '重複回避により調整'
+    case 'space-optimization':
+      return 'スペース最適化により調整'
+    default:
+      return '自動調整適用'
   }
 }
 </script>
@@ -440,5 +542,107 @@ const updateSpiralFactor = (groupId: string, pointIndex: number, event: Event) =
 .param-input:focus {
     outline: none;
     border-color: var(--color-primary);
+}
+
+.param-input.has-adjustment {
+    border-color: var(--color-warning);
+    background: rgba(255, 193, 7, 0.1);
+}
+
+/* 調整値表示 */
+.param-with-adjustment {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+}
+
+.adjustment-display {
+    font-size: var(--font-size-xs);
+    color: var(--color-warning);
+    font-weight: var(--font-weight-medium);
+    white-space: nowrap;
+}
+
+.adjustment-indicator {
+    color: var(--color-warning);
+    font-weight: var(--font-weight-bold);
+    cursor: help;
+}
+
+.adjustment-info {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    background: rgba(255, 193, 7, 0.1);
+    border: 1px solid var(--color-warning);
+    border-radius: var(--border-radius-xs);
+    margin-top: var(--spacing-xs);
+}
+
+.adjustment-reason {
+    font-size: var(--font-size-xs);
+    color: var(--color-warning);
+    font-style: italic;
+}
+
+/* 重複解消制御 */
+.group-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+}
+
+.overlap-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+}
+
+.overlap-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    cursor: pointer;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+}
+
+.overlap-checkbox {
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    cursor: pointer;
+}
+
+.overlap-label-text {
+    white-space: nowrap;
+    user-select: none;
+}
+
+/* 制御点アクション */
+.point-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+}
+
+.point-overlap-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    cursor: pointer;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+}
+
+.point-overlap-checkbox {
+    width: 12px;
+    height: 12px;
+    margin: 0;
+    cursor: pointer;
+}
+
+.point-overlap-label-text {
+    white-space: nowrap;
+    user-select: none;
 }
 </style>

@@ -259,9 +259,9 @@ const updateCurve = (isFinalResult = false) => {
   const curveData = result.data || result
   currentCurveData = curveData
 
-  if (canvasStore.debugMode && curveData.clothoidData) {
-    // オーバーラップ検出のロジックは必要に応じて後で追加
-    overlapResults = null
+  // デバッグモード時にオーバーラップ結果を設定
+  if (canvasStore.debugMode && curveData.overlapResolution && curveData.overlapResolution.overlapResults) {
+    overlapResults = curveData.overlapResolution.overlapResults
   } else {
     overlapResults = null
   }

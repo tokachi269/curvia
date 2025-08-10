@@ -1,11 +1,26 @@
+// 制御点の調整情報
+export interface ControlPointAdjustment {
+  type: 'radius-scaling' | 'spiral-scaling' | 'auto-fit'
+  originalRadius: number
+  originalSpiralFactor: number
+  radiusScale: number
+  spiralScale: number
+  reason: 'overlap-prevention' | 'space-optimization'
+  affectedSegments: number[]
+}
+
 // 制御点の型定義
 export interface ControlPoint {
   x: number
   y: number
-  radius: number
-  spiralFactor: number
+  radius: number                     // ユーザー設定値
+  adjustedRadius?: number            // 調整後の値（実際の描画に使用）
+  spiralFactor: number               // ユーザー設定値
+  adjustedSpiralFactor?: number      // 調整後の値
   spiralMode?: 'auto' | 'manual'
   spiralLength?: number
+  adjustment?: ControlPointAdjustment // 調整情報
+  overlapResolution?: OverlapResolutionSettings // 個別制御点の重複解消設定
 }
 
 // 線の塊（カーブグループ）の型定義
@@ -15,6 +30,13 @@ export interface CurveGroup {
   points: ControlPoint[]
   visible: boolean
   color?: string
+  overlapResolution?: OverlapResolutionSettings
+}
+
+// 重複解消設定の型定義
+export interface OverlapResolutionSettings {
+  enabled: boolean
+  mode: 'global' | 'individual'     // 全体一括 or コーナー別調整
 }
 
 // キャンバス変換の型定義

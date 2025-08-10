@@ -23,7 +23,11 @@
         <BackgroundImagePanel @updateCanvas="updateCanvas" />
 
         <!-- 制御点設定 -->
-        <ControlPointsPanel @updateCurve="updateCurve" @pointSelected="handlePointSelected" />
+        <ControlPointsPanel 
+          @updateCurve="updateCurve" 
+          @pointSelected="handlePointSelected"
+          @overlapResolutionChanged="handleOverlapResolutionChanged" 
+        />
       </div>
 
       <!-- キャンバスエリア -->
@@ -144,6 +148,13 @@ const updateCurve = () => {
     canvasArea.value.updateCurve()
   }
 }
+
+// 重複解消設定変更ハンドラー
+const handleOverlapResolutionChanged = (settings: { enabled: boolean, mode: 'global' | 'individual' }) => {
+  logger.curve.info('重複解消設定変更', settings)
+  // 設定変更後に曲線を更新
+  updateCurve()
+}
 </script>
 
 <style>
@@ -188,6 +199,7 @@ html, body {
   --color-focus: #3b82f6;
   --color-accent: #3b82f6;               /* アクセントカラー（プライマリと同じ） */
   --color-surface-selected: #dbeafe;     /* 選択状態の背景 */
+  --color-warning: #f59e0b;              /* 警告色 */
   
   /* スペーシング */
   --spacing-xxs: 1px;

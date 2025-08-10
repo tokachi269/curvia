@@ -49,13 +49,6 @@ export class LoopModeIndexCalculator {
       labelIndex = segmentIndex + 1
     }
     
-    logger.curve.debug('LoopModeIndexCalculator: ラベルインデックス計算', {
-      segmentIndex,
-      pointsLength,
-      isLoop,
-      calculatedLabelIndex: labelIndex
-    })
-    
     return labelIndex
   }
 

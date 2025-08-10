@@ -3,6 +3,7 @@ import { calculateSingleClothoid, generateSpiralPoints, generateArcPoints } from
 import { logger, formatDebugInfo, PerformanceTimer, setGlobalState } from './logger.js'
 import { createError, createSuccess, isError, validate, safeExecute, ERROR_CODES } from './errorHandler.js'
 import { getUnifiedLabelIndex } from './loopProtection.js'
+import { detectOverlaps, adjustPointsForOverlaps } from './overlapDetector.js'
 
 // ========================================
 // セグメントインデックス定数（保守性向上）
@@ -93,7 +94,7 @@ function generateClothoidCurveInternal(points, speed = 60, isLoop = false, defau
       `P${i}: (${p.x.toFixed(1)}, ${p.y.toFixed(1)}) R=${p.radius || '未設定'}`
     ))
 
-    // セグメント処理
+    // セグメント処理（元の制御点を使用）
     const segmentResult = processAllSegments(points, isLoop, defaultSpiralFactor, debugInfo)
     
     if (isError(segmentResult)) {
@@ -105,6 +106,84 @@ function generateClothoidCurveInternal(points, speed = 60, isLoop = false, defau
     }
 
     const { allCurvePoints, segments, totalSegments } = segmentResult.data
+    
+    // 曲線データを構築して重複検出
+    const curveData = {
+      curve: allCurvePoints,
+      clothoidData: {
+        segments,
+        isMultiPoint: points.length > 3,
+        isLoop,
+        totalSegments
+      }
+    }
+    
+    // 重複検出
+    const overlapResults = detectOverlaps(curveData, points)
+    
+    if (overlapResults.hasOverlaps) {
+      logger.curve.warn('重複検出により制御点を調整して再計算', {
+        重複数: overlapResults.overlaps.length,
+        再計算実行: true
+      })
+      
+      // 制御点を調整して再計算
+      const adjustedPoints = adjustPointsForOverlaps(points, overlapResults, isLoop)
+      const adjustedResult = processAllSegments(adjustedPoints, isLoop, defaultSpiralFactor, debugInfo)
+      
+      if (isError(adjustedResult)) {
+        logger.curve.error('調整後の再計算でエラー', adjustedResult.error)
+        // エラーの場合は元の結果を使用
+      } else {
+        // 調整後の結果を使用
+        const adjustedData = adjustedResult.data
+        
+        debugInfo += formatDebugInfo('重複解消適用', {
+          元の制御点数: points.length,
+          調整後制御点数: adjustedPoints.length,
+          調整制御点数: adjustedPoints.filter(p => p.adjustment).length,
+          重複検出数: overlapResults.overlaps.length
+        })
+        
+        const totalTime = timer.end()
+
+        logger.curve.info('曲線生成完了（重複解消済み）', {
+          総点数: adjustedData.allCurvePoints.length,
+          処理セグメント数: adjustedData.totalSegments,
+          計算時間: `${totalTime.toFixed(2)}ms`,
+          重複解消: '適用済み'
+        })
+
+        // 最終結果フラグをリセット
+        if (isFinalResult) {
+          setGlobalState({ showFinalResult: false })
+        }
+
+        debugInfo += formatDebugInfo('生成完了', {
+          総点数: adjustedData.allCurvePoints.length,
+          処理セグメント数: adjustedData.totalSegments,
+          計算時間: `${totalTime.toFixed(2)}ms`,
+          重複解消: '適用'
+        })
+
+        return createSuccess({
+          curve: adjustedData.allCurvePoints,
+          clothoidData: {
+            segments: adjustedData.segments,
+            isMultiPoint: points.length > 3,
+            isLoop,
+            totalSegments: adjustedData.totalSegments,
+            calculationTime: totalTime,
+            overlapResolution: {
+              applied: true,
+              originalPoints: points,
+              adjustedPoints: adjustedPoints,
+              overlapResults: overlapResults
+            }
+          }
+        }, debugInfo)
+      }
+    }
 
     const totalTime = timer.end()
 
@@ -133,7 +212,12 @@ function generateClothoidCurveInternal(points, speed = 60, isLoop = false, defau
         isMultiPoint: points.length > 3,
         isLoop,
         totalSegments,
-        calculationTime: totalTime
+        calculationTime: totalTime,
+        overlapResolution: {
+          applied: false,
+          originalPoints: points,
+          processedPoints: points
+        }
       }
     }, debugInfo)
 
@@ -326,7 +410,7 @@ function processSingleSegment(points, segmentIndex, segmentCount, isLoop, defaul
     radius: segmentConfig.radius,
     spiralLength: segmentConfig.spiralLength,
     curveType: CURVE_TYPES.CLOTHOID,
-    spiralFactor: defaultSpiralFactor,
+    spiralFactor: segmentConfig.spiralFactor || defaultSpiralFactor,
     isMultiPoint: true,
     isLastSegment: segmentIndex === segmentCount - 1 && !isLoop
   })
@@ -375,9 +459,10 @@ function getSegmentPoints(points, segmentIndex) {
  */
 function getSegmentConfiguration(centerPoint) {
   return {
-    radius: centerPoint.radius || 50,
+    radius: centerPoint.adjustedRadius || centerPoint.radius || 50,
     spiralLength: (centerPoint.spiralMode === 'manual' && centerPoint.spiralLength) 
-      ? centerPoint.spiralLength : null
+      ? centerPoint.spiralLength : null,
+    spiralFactor: centerPoint.adjustedSpiralFactor || centerPoint.spiralFactor
   }
 }
 
