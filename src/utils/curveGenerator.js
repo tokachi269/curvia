@@ -3,7 +3,7 @@ import { calculateSingleClothoid, generateSpiralPoints, generateArcPoints } from
 import { logger, formatDebugInfo, PerformanceTimer, setGlobalState } from './logger.js'
 import { createError, createSuccess, isError, validate, safeExecute, ERROR_CODES } from './errorHandler.js'
 import { getUnifiedLabelIndex } from './loopProtection.js'
-import { detectOverlaps, adjustPointsForOverlaps } from './overlapDetector.js'
+import { detectOverlaps, adjustControlPointsForConstraints } from './overlapDetector.js'
 
 // ========================================
 // セグメントインデックス定数（保守性向上）
@@ -32,10 +32,11 @@ const LOOP_CONNECTION_SPEC = {
  * @param {boolean} isLoop - ループモード
  * @param {number} defaultSpiralFactor - デフォルトスパイラル係数
  * @param {boolean} isFinalResult - ドラッグ終了時の最終結果フラグ
+ * @param {boolean} enableControlPointCheck - 制御点チェック機能有効化
  * @returns {Object} 曲線データ
  */
-export function generateClothoidCurve(points, speed = 60, isLoop = false, defaultSpiralFactor = 2.0, isFinalResult = false) {
-  return generateClothoidCurveInternal(points, speed, isLoop, defaultSpiralFactor, isFinalResult)
+export function generateClothoidCurve(points, speed = 60, isLoop = false, defaultSpiralFactor = 2.0, isFinalResult = false, enableControlPointCheck = true) {
+  return generateClothoidCurveInternal(points, speed, isLoop, defaultSpiralFactor, isFinalResult, enableControlPointCheck)
 }
 
 /**
@@ -59,7 +60,7 @@ export function generateCurve(points, speed = 60, isLoop = false, defaultSpiralF
  * @param {boolean} isFinalResult - ドラッグ終了時の最終結果フラグ
  * @returns {Object} 曲線データ
  */
-function generateClothoidCurveInternal(points, speed = 60, isLoop = false, defaultSpiralFactor = 2.0, isFinalResult = false) {
+function generateClothoidCurveInternal(points, speed = 60, isLoop = false, defaultSpiralFactor = 2.0, isFinalResult = false, enableControlPointCheck = true) {
   const timer = new PerformanceTimer('統一曲線生成')
 
   // 最終結果フラグをloggerに一時的に設定
@@ -67,11 +68,7 @@ function generateClothoidCurveInternal(points, speed = 60, isLoop = false, defau
     setGlobalState({ showFinalResult: true })
   }
 
-  logger.curve.info('曲線生成開始', {
-    点数: points.length,
-    速度: speed,
-    ループ: isLoop
-  })
+  logger.curve.info('曲線生成開始', { 点数: points.length, ループ: isLoop })
 
   let debugInfo = formatDebugInfo('統一曲線生成', {
     制御点数: points.length,
@@ -89,10 +86,6 @@ function generateClothoidCurveInternal(points, speed = 60, isLoop = false, defau
       }
       return { ...validationResult, debug: debugInfo }
     }
-
-    logger.curve.debug('制御点詳細', points.map((p, i) =>
-      `P${i}: (${p.x.toFixed(1)}, ${p.y.toFixed(1)}) R=${p.radius || '未設定'}`
-    ))
 
     // セグメント処理（元の制御点を使用）
     const segmentResult = processAllSegments(points, isLoop, defaultSpiralFactor, debugInfo)
@@ -121,14 +114,58 @@ function generateClothoidCurveInternal(points, speed = 60, isLoop = false, defau
     // 重複検出
     const overlapResults = detectOverlaps(curveData, points)
     
-    if (overlapResults.hasOverlaps) {
-      logger.curve.warn('重複検出により制御点を調整して再計算', {
-        重複数: overlapResults.overlaps.length,
-        再計算実行: true
-      })
+    // 常に一度だけ詰め込みを試す（内部で超過が無ければ t=1 のまま＝無調整）
+    const segmentData = segmentResult.data.segments || []
+    const clothoidSegments = segmentData.filter(s => s && s.TS && s.ST && !s.isLine)
+    
+    // 制御点チェック機能の設定をUIから受け取る
+    const adjustedPoints = adjustControlPointsForConstraints(points, clothoidSegments, isLoop, enableControlPointCheck)
+    
+    const shouldApplyAdjusted = 
+      adjustedPoints &&
+      adjustedPoints.some(p => p && p.adjustment && p.adjustment.type === 'unified-constraint-adjustment')
+    
+    if (shouldApplyAdjusted) {
+      // 制約違反統合調整
       
-      // 制御点を調整して再計算
-      const adjustedPoints = adjustPointsForOverlaps(points, overlapResults, isLoop)
+      // adjustControlPointsForConstraintsがnullを返した場合は元の制御点を使用
+      if (!adjustedPoints) {
+        const totalTime = timer.end()
+        
+        logger.curve.info('曲線生成完了（調整失敗）', {
+          総点数: segmentResult.data.allCurvePoints.length,
+          計算時間: `${totalTime.toFixed(2)}ms`
+        })
+
+        // 最終結果フラグをリセット
+        if (isFinalResult) {
+          setGlobalState({ showFinalResult: false })
+        }
+
+        debugInfo += formatDebugInfo('生成完了（調整なし）', {
+          総点数: segmentResult.data.allCurvePoints.length,
+          処理セグメント数: segmentResult.data.totalSegments,
+          計算時間: `${totalTime.toFixed(2)}ms`,
+          重複検出: overlapResults.hasOverlaps ? '検出あり' : '検出なし',
+          調整結果: '失敗（有効な方程式不足）'
+        })
+
+        return createSuccess({
+          curvePoints: segmentResult.data.allCurvePoints,
+          clothoidData: {
+            ...segmentResult.data,
+            overlapResolution: {
+              applied: false,
+              originalPoints: points,
+              processedPoints: points,
+              overlapResults,
+              adjustmentFailed: true,
+              reason: 'insufficient-valid-equations'
+            }
+          }
+        }, debugInfo)
+      }
+      
       const adjustedResult = processAllSegments(adjustedPoints, isLoop, defaultSpiralFactor, debugInfo)
       
       if (isError(adjustedResult)) {
@@ -138,20 +175,19 @@ function generateClothoidCurveInternal(points, speed = 60, isLoop = false, defau
         // 調整後の結果を使用
         const adjustedData = adjustedResult.data
         
-        debugInfo += formatDebugInfo('重複解消適用', {
+        debugInfo += formatDebugInfo('フットプリント等式適用', {
           元の制御点数: points.length,
           調整後制御点数: adjustedPoints.length,
           調整制御点数: adjustedPoints.filter(p => p.adjustment).length,
-          重複検出数: overlapResults.overlaps.length
+          重複検出数: overlapResults.overlaps.length,
+          調整方式: 'フットプリント等式・直線ゼロ'
         })
         
         const totalTime = timer.end()
 
-        logger.curve.info('曲線生成完了（重複解消済み）', {
+        logger.curve.info('曲線生成完了（調整済み）', {
           総点数: adjustedData.allCurvePoints.length,
-          処理セグメント数: adjustedData.totalSegments,
-          計算時間: `${totalTime.toFixed(2)}ms`,
-          重複解消: '適用済み'
+          計算時間: `${totalTime.toFixed(2)}ms`
         })
 
         // 最終結果フラグをリセット
@@ -183,6 +219,12 @@ function generateClothoidCurveInternal(points, speed = 60, isLoop = false, defau
           }
         }, debugInfo)
       }
+    } else if (overlapResults.hasOverlaps) {
+      // 方向オーバーラップは出ているが詰め不要だったケース（理論上稀）
+      logger.curve.warn('フットプリント等式調整失敗 - 元の制御点を使用', {
+        重複数: overlapResults.overlaps?.length || 0,
+        調整結果: '詰め込み不要または失敗'
+      })
     }
 
     const totalTime = timer.end()
@@ -254,7 +296,7 @@ function processAllSegments(points, isLoop, defaultSpiralFactor, debugInfo) {
   let previousSegmentST = null
 
   const segmentCount = isLoop ? points.length : points.length - 2
-  logger.curve.info(`セグメント計算開始: ${segmentCount}個のセグメントを処理`)
+  // セグメント計算開始（ログ削減）
 
   // 各セグメントを処理
   for (let i = 0; i < segmentCount; i++) {
@@ -280,7 +322,7 @@ function processAllSegments(points, isLoop, defaultSpiralFactor, debugInfo) {
         const firstTS = segmentInfo.TS // TS1
         const initialConnectionDistance = Math.hypot(firstTS.x - startPoint.x, firstTS.y - startPoint.y)
         
-        logger.curve.debug(`P0-TS1初期接続チェック: 距離:${initialConnectionDistance.toFixed(3)}m`)
+        // 初期接続チェック（ログ削減）
         
         if (initialConnectionDistance > 0.1) {
           const initialConnectionPoints = generateConnectionPoints(startPoint, firstTS, initialConnectionDistance)
@@ -393,9 +435,7 @@ function processSingleSegment(points, segmentIndex, segmentCount, isLoop, defaul
   // セグメントの3点を取得
   const segmentPoints = getSegmentPoints(points, segmentIndex)
   
-  logger.curve.debug(`セグメント ${segmentIndex + 1}/${segmentCount}`,
-    `P${segmentIndex} → P${(segmentIndex + 1) % points.length} → P${(segmentIndex + 2) % points.length}`
-  )
+  // セグメント処理（ログ削減）
 
   // セグメント設定を取得
   const segmentConfig = getSegmentConfiguration(segmentPoints[1])
@@ -423,7 +463,7 @@ function processSingleSegment(points, segmentIndex, segmentCount, isLoop, defaul
   }
 
   const segmentData = segmentResult.data || segmentResult
-  logger.curve.debug(`セグメント完了: ${segmentData.curve?.length || 0}点生成`)
+  // セグメント完了（ログ削減）
 
   // 曲線を調整
   const curveToAdd = adjustSegmentCurve(segmentData, segmentIndex)

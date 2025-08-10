@@ -26,11 +26,7 @@ export class LoopModeIndexCalculator {
   static getSegmentCount(pointsLength, isLoop) {
     const segmentCount = isLoop ? pointsLength : pointsLength - 2
     
-    logger.curve.debug('LoopModeIndexCalculator: セグメント数計算', {
-      pointsLength,
-      isLoop,
-      calculatedSegmentCount: segmentCount
-    })
+    // セグメント数計算（ログ削減）
     
     return segmentCount
   }

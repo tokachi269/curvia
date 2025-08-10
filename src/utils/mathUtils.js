@@ -18,11 +18,9 @@ import { createError, createSuccess, ERROR_CODES } from './errorHandler.js'
  */
 export function calcDeviation(a, L) {
   if (L === 0) {
-    logger.curve.debug('偏角計算: L=0のため0を返す')
-    return 0
+    return 0 // ログ削減
   }
   const result = (a * a) / (2 * L * L)
-  logger.curve.trace(`偏角計算: a=${a}, L=${L}, result=${result}`)
   return result
 }
 
@@ -35,8 +33,7 @@ export function calcDeviation(a, L) {
  */
 export function calcClothoidX(a, L) {
   if (L === 0) {
-    logger.curve.debug('X座標計算: L=0のため0を返す')
-    return 0
+    return 0 // ログ削減
   }
   
   const am = calcDeviation(a, L)
@@ -73,8 +70,7 @@ export function calcClothoidX(a, L) {
  */
 export function calcClothoidY(a, L) {
   if (L === 0) {
-    logger.curve.debug('Y座標計算: L=0のため0を返す')
-    return 0
+    return 0 // ログ削減
   }
   
   const am = calcDeviation(a, L)
@@ -179,8 +175,7 @@ export function getLineIntersection(p1, dir1, p2, dir2) {
   const det = dir1[0] * dir2[1] - dir1[1] * dir2[0]
   
   if (Math.abs(det) < 1e-10) {
-    logger.curve.debug('直線交点計算: 直線が平行のため交点なし')
-    return null // 平行
+    return null // 平行（ログ削減）
   }
   
   const dx = p2[0] - p1[0]

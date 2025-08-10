@@ -26,7 +26,8 @@
         <ControlPointsPanel 
           @updateCurve="updateCurve" 
           @pointSelected="handlePointSelected"
-          @overlapResolutionChanged="handleOverlapResolutionChanged" 
+          @overlapResolutionChanged="handleOverlapResolutionChanged"
+          @footprintSettingsChanged="handleFootprintSettingsChanged"
         />
       </div>
 
@@ -115,6 +116,11 @@ const selectedPoint = ref(-1)
 const canvasArea = ref<InstanceType<typeof CanvasArea> | null>(null)
 const errorToast = ref<InstanceType<typeof ErrorToast> | null>(null)
 
+// フットプリント調整設定
+const footprintSettings = ref({
+  enableControlPointCheck: true // デフォルトtrue
+})
+
 // 制御点を選択
 const selectPoint = (index: number) => {
   selectedPoint.value = index
@@ -153,6 +159,19 @@ const updateCurve = () => {
 const handleOverlapResolutionChanged = (settings: { enabled: boolean, mode: 'global' | 'individual' }) => {
   logger.curve.info('重複解消設定変更', settings)
   // 設定変更後に曲線を更新
+  updateCurve()
+}
+
+// フットプリント設定変更ハンドラー
+const handleFootprintSettingsChanged = (settings: { enableControlPointCheck: boolean }) => {
+  footprintSettings.value = settings
+  logger.curve.info('フットプリント設定変更', {
+    制御点チェック: settings.enableControlPointCheck ? '有効' : '無効'
+  })
+  // 設定をCanvasAreaに伝達して曲線を更新
+  if (canvasArea.value && 'updateFootprintSettings' in canvasArea.value) {
+    ;(canvasArea.value as any).updateFootprintSettings(settings)
+  }
   updateCurve()
 }
 </script>

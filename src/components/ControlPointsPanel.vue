@@ -5,6 +5,8 @@
             <BaseCheckbox v-model="controlPointsStore.isLoopMode" @change="updateCurve" label="ループモード" />
         </PropertyRow>
 
+
+
         <!-- アクションボタン -->
         <PropertySubgroup title="操作">
             <ButtonRow>
@@ -87,10 +89,15 @@ const selectedPoint = ref(-1)
 const selectedGroupId = ref('default')
 const selectedPointId = ref<string | undefined>(undefined)
 
-// 重複解消設定のローカル状態
+// 重複解消設定のローカル状態（フットプリント調整を含む統合版）
 const groupOverlapSettings = ref({
     enabled: false,
     mode: 'global' as 'global' | 'individual'
+})
+
+// フットプリント調整設定のローカル状態（重複解消機能と統合）
+const footprintSettings = ref({
+    enableControlPointCheck: true // デフォルトtrue（既存の重複解消機能と連動）
 })
 
 // 一時的に既存のpoints配列をCurveGroupに変換
@@ -145,9 +152,19 @@ const updateCurve = () => {
     emit('updateCurve')
 }
 
-// 重複解消制御ハンドラー
+// フットプリント設定変更ハンドラー
+const handleFootprintSettingsChanged = () => {
+    // 既存の重複解消機能に統合
+    groupOverlapSettings.value.enabled = footprintSettings.value.enableControlPointCheck
+    emit('overlapResolutionChanged', groupOverlapSettings.value)
+    updateCurve()
+}
+
+// 重複解消制御ハンドラー（方向オーバーラップ + フットプリント超過を統合処理）
 const handleToggleGroupOverlapResolution = (groupId: string) => {
     groupOverlapSettings.value.enabled = !groupOverlapSettings.value.enabled
+    // フットプリント設定も同期
+    footprintSettings.value.enableControlPointCheck = groupOverlapSettings.value.enabled
     emit('overlapResolutionChanged', groupOverlapSettings.value)
     updateCurve()
 }
@@ -470,5 +487,15 @@ const expandPoint = (index: number) => {
     /* セレクトはプライマリ */
     color: var(--color-text-secondary);
     flex: 1;
+}
+
+/* プロパティ説明文のスタイル */
+.property-description {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+    margin-top: var(--spacing-xs);
+    padding-left: var(--spacing-sm);
+    line-height: 1.4;
+    font-style: italic;
 }
 </style>

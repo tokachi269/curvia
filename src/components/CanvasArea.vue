@@ -105,6 +105,11 @@ interface Emits {
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
+// フットプリント設定のローカル状態
+const footprintSettings = ref({
+  enableControlPointCheck: true // デフォルトtrue
+})
+
 // ストアの初期化
 const controlPointsStore = useControlPointsStore()
 const canvasStore = useCanvasStore()
@@ -233,7 +238,14 @@ const updateCurve = (isFinalResult = false) => {
     return
   }
 
-  const result = generateClothoidCurve(currentPoints, 60, controlPointsStore.isLoopMode, controlPointsStore.defaultSpiralFactor, isFinalResult)
+  const result = generateClothoidCurve(
+    currentPoints, 
+    60, 
+    controlPointsStore.isLoopMode, 
+    controlPointsStore.defaultSpiralFactor, 
+    isFinalResult,
+    footprintSettings.value.enableControlPointCheck
+  )
 
   if (result.error) {
     emit('error', result.error)
@@ -646,10 +658,19 @@ watch(() => canvasStore.lineWidth, () => {
   updateCanvas()
 })
 
+// フットプリント設定更新メソッド
+const updateFootprintSettings = (settings: { enableControlPointCheck: boolean }) => {
+  footprintSettings.value = settings
+  logger.curve.info('CanvasArea: フットプリント設定更新', {
+    制御点チェック: settings.enableControlPointCheck ? '有効' : '無効'
+  })
+}
+
 // 外部からの更新を受け取るメソッドを定義
 defineExpose({
   updateCanvas,
-  updateCurve
+  updateCurve,
+  updateFootprintSettings
 })
 </script>
 
